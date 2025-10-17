@@ -22,11 +22,11 @@ export const Hero = () => {
         </div>
         
         <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent leading-tight">
-          ٹیکسٹ سے ویڈیو
+          Text to Video
         </h1>
         
         <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-          اپنی تفصیل لکھیں اور AI کو شاندار ویڈیو بنانے دیں
+          Write your description and let the AI create an amazing video
         </p>
 
         <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground pt-4">
