@@ -3,11 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, Camera, Ban, Info, Wand2 } from "lucide-react";
+import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, Camera, Ban, Info, Music } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 
-// Define interfaces for history and other objects
+// (Interfaces and constants remain the same)
 interface GeneratedVideo {
   url: string;
   prompt: string;
@@ -32,12 +32,11 @@ const CAMERA_CONTROLS = {
   TILT_DOWN: "Tilt Down",
 };
 
-// --- UPGRADED MODEL ---
-// Using Meta's Llama-3 8B Instruct model for higher quality prompt generation
 const HUGGING_FACE_API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct";
-const HUGGING_FACE_TOKEN = ""; // Optional but recommended for higher rate limits: "Bearer hf_..."
+const HUGGING_FACE_TOKEN = ""; // Optional
 
 export const VideoGenerator = () => {
+  // (State variables remain the same)
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("blurry, low quality, text, watermark, grainy, deformed");
   const [cameraControl, setCameraControl] = useState<keyof typeof CAMERA_CONTROLS>("NONE");
@@ -45,7 +44,6 @@ export const VideoGenerator = () => {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [currentVideo, setCurrentVideo] = useState<GeneratedVideo | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isEnhancing, setIsEnhancing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<GeneratedVideo[]>([]);
   const [selectedQuality, setSelectedQuality] = useState<keyof typeof VIDEO_QUALITY_LEVELS>('STANDARD');
@@ -54,61 +52,12 @@ export const VideoGenerator = () => {
   const getFallbackPrompts = () => [
     "A majestic eagle soaring over mountains, cinematic lighting",
     "Ocean waves crashing on a sunny beach, hyperrealistic",
-    "A futuristic city with flying cars at night, neon-drenched, Blade Runner style",
-    "A quiet, enchanted forest with glowing mushrooms and sunbeams",
-    "A time-lapse of a flower blooming, vibrant colors, macro shot",
-    "A cat playfully chasing a shimmering butterfly in a garden",
+    "A futuristic city with flying cars at night, neon-drenched",
+    "A quiet, enchanted forest with glowing mushrooms",
+    "A time-lapse of a flower blooming, vibrant colors",
+    "A cat playfully chasing a shimmering butterfly",
   ];
 
-  // Function to enhance prompt using Llama-3
-  const enhancePromptWithAI = async () => {
-    if (!prompt.trim()) {
-      toast({ title: "Prompt is empty", description: "Write a simple idea first, then enhance it with AI.", variant: "destructive" });
-      return;
-    }
-    
-    setIsEnhancing(true);
-    try {
-      // Llama-3 uses a specific chat template
-      const messages = [
-        { role: "system", content: "You are a creative assistant for a text-to-video AI. Enhance the user's simple prompt into a detailed, vivid, and cinematic description. Focus on atmosphere, lighting, and composition. The output must be a single, concise sentence of about 25-30 words. Do not add any extra text, just the prompt." },
-        { role: "user", content: prompt }
-      ];
-
-      const response = await fetch(HUGGING_FACE_API_URL, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(HUGGING_FACE_TOKEN && { Authorization: HUGGING_FACE_TOKEN })
-        },
-        body: JSON.stringify({ 
-          inputs: messages,
-          parameters: { max_new_tokens: 60, return_full_text: false }
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        if (errorData.error && errorData.error.includes("is currently loading")) {
-            toast({ title: "AI Model is Waking Up", description: "This is a large model and can take a moment to load. Please try again in 20-30 seconds.", variant: "default" });
-        } else {
-            throw new Error(errorData.error || "Failed to fetch from Hugging Face API");
-        }
-      } else {
-        const data = await response.json();
-        const enhancedPrompt = data[0].generated_text.trim().replace(/"/g, '');
-        setPrompt(enhancedPrompt);
-        toast({ title: "Prompt Enhanced!", description: "Your idea has been supercharged by Llama-3." });
-      }
-
-    } catch (error) {
-      console.error("Prompt enhancement failed:", error);
-      toast({ title: "Enhancement Failed", description: "Could not connect to the AI service.", variant: "destructive" });
-    }
-    setIsEnhancing(false);
-  };
-
-  // Function to get dynamic example prompts from Llama-3
   const getDynamicExamples = async () => {
     try {
       const messages = [
@@ -142,7 +91,18 @@ export const VideoGenerator = () => {
     getDynamicExamples();
   }, []);
 
-  // ... (The rest of the component remains the same)
+  // --- DOWNLOAD FIX ---
+  // This function now opens the video in a new tab for easy saving.
+  const handleDownload = () => {
+    if (!videoUrl) return;
+    window.open(videoUrl, '_blank');
+    toast({
+      title: "Opening Video in New Tab",
+      description: "Right-click on the video and choose 'Save video as...' to download.",
+    });
+  };
+
+  // (All other functions remain the same)
   const saveToHistory = (video: GeneratedVideo) => {
     const newHistory = [video, ...videoHistory].slice(0, 10);
     setVideoHistory(newHistory);
@@ -196,7 +156,7 @@ export const VideoGenerator = () => {
       setCurrentVideo(generatedVideo);
       setProgress(100);
       saveToHistory(generatedVideo);
-      toast({ title: "Success! 🎉", description: "Your video has been generated." });
+      toast({ title: "Success! 🎉", description: "Your silent video has been generated." });
     } catch (error) {
       console.error("Generation failed:", error);
       toast({ title: "Generation Failed", description: "The video service is busy. Please try again.", variant: "destructive" });
@@ -205,26 +165,6 @@ export const VideoGenerator = () => {
 
     clearInterval(progressInterval);
     setIsGenerating(false);
-  };
-
-  const handleDownload = async () => {
-    if (!videoUrl) return;
-    try {
-      const response = await fetch(videoUrl);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const extension = blob.type.startsWith('video') ? 'mp4' : 'jpeg';
-      a.download = `ai-video-${Date.now()}.${extension}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast({ title: "Downloaded!", description: "Video saved to your device." });
-    } catch (error) {
-      toast({ title: "Download Error", description: "Could not download the video.", variant: "destructive" });
-    }
   };
   
   const handleShare = async () => {
@@ -249,10 +189,19 @@ export const VideoGenerator = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8 p-4">
       <Card className="p-6 md:p-8 bg-card/50 backdrop-blur-lg border-border/20 shadow-lg">
         <div className="space-y-6">
+          {/* Sound Info Box */}
+          <div className="flex items-center gap-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+            <Music className="h-5 w-5 text-yellow-500 flex-shrink-0" />
+            <p className="text-xs text-yellow-500/90">
+              <strong>Note:</strong> The generated videos are silent. Sound generation is a separate feature that can be added later.
+            </p>
+          </div>
+
           <div className="space-y-3">
             <label htmlFor="prompt" className="text-lg font-semibold flex items-center gap-2 text-foreground">
               <Sparkles className="h-5 w-5 text-primary" />
@@ -264,12 +213,8 @@ export const VideoGenerator = () => {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-[120px] text-base resize-none bg-background/70"
-              disabled={isGenerating || isEnhancing}
+              disabled={isGenerating}
             />
-            <Button onClick={enhancePromptWithAI} disabled={isEnhancing || !prompt.trim()} variant="outline" size="sm" className="gap-2">
-              {isEnhancing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-              Enhance with AI (Llama-3)
-            </Button>
           </div>
 
           <div className="space-y-3">
@@ -338,7 +283,7 @@ export const VideoGenerator = () => {
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><Sparkles className="h-5 w-5 text-accent" />AI-Generated Ideas</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {examplePrompts.map((example, index) => (
-            <button key={index} onClick={() => setPrompt(example)} className="text-left p-3 rounded-lg bg-background/50 hover:bg-background border transition-colors text-sm" disabled={isGenerating || isEnhancing}>
+            <button key={index} onClick={() => setPrompt(example)} className="text-left p-3 rounded-lg bg-background/50 hover:bg-background border transition-colors text-sm" disabled={isGenerating}>
               {example}
             </button>
           ))}
