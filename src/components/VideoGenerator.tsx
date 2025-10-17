@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, Timer } from "lucide-react";
+import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 
@@ -11,15 +10,12 @@ interface GeneratedVideo {
   url: string;
   prompt: string;
   timestamp: number;
-  duration: string;
 }
 
 export const VideoGenerator = () => {
   const [prompt, setPrompt] = useState("");
-  const [duration, setDuration] = useState("4s");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState("");
-  const [currentDuration, setCurrentDuration] = useState("4s");
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<GeneratedVideo[]>([]);
@@ -46,18 +42,11 @@ export const VideoGenerator = () => {
     "Ocean waves crashing on a beach at golden hour",
   ];
 
-  const durationOptions = [
-    { value: "4s", label: "4 seconds" },
-    { value: "8s", label: "8 seconds" },
-    { value: "15s", label: "15 seconds" },
-    { value: "30s", label: "30 seconds" },
-  ];
-
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast({
-        title: "Error",
-        description: "Please enter a video description",
+        title: "خطا",
+        description: "براہ کرم ویڈیو کی تفصیل درج کریں",
         variant: "destructive",
       });
       return;
@@ -67,9 +56,7 @@ export const VideoGenerator = () => {
     setVideoUrl(null);
     setProgress(0);
     setCurrentPrompt(prompt);
-    setCurrentDuration(duration);
 
-    // Simulate progress
     const progressInterval = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 90) return prev;
@@ -78,125 +65,53 @@ export const VideoGenerator = () => {
     }, 500);
 
     try {
-      // Create enhanced prompt with duration
-      const enhancedPrompt = `${prompt.trim()}, duration: ${duration}`;
-      const encodedPrompt = encodeURIComponent(enhancedPrompt);
+      const encodedPrompt = encodeURIComponent(prompt.trim());
       const apiUrl = `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodedPrompt}`;
       
-      console.log("Fetching video from:", apiUrl);
-      
-      const response = await fetch(apiUrl, {
-        method: "GET",
-      });
-      
-      console.log("Response status:", response.status);
-      console.log("Response content-type:", response.headers.get("content-type"));
+      const response = await fetch(apiUrl);
       
       if (!response.ok) {
-        // Try to get error message from response
-        let errorMessage = `API Error: ${response.status}`;
-        try {
-          const errorText = await response.text();
-          console.log("Error response:", errorText);
-          
-          // Try to parse as JSON
-          try {
-            const errorJson = JSON.parse(errorText);
-            errorMessage = errorJson.error || errorJson.message || errorMessage;
-          } catch {
-            errorMessage = errorText || errorMessage;
-          }
-        } catch {
-          // Ignore if we can't read the error
-        }
-        throw new Error(errorMessage);
+        throw new Error(`API Error: ${response.status}`);
       }
 
-      const contentType = response.headers.get("content-type") || "";
-      console.log("Content type:", contentType);
-
-      // Check if response is JSON (error or URL response)
-      if (contentType.includes("application/json") || contentType.includes("text")) {
-        const jsonData = await response.json();
-        console.log("JSON response:", jsonData);
-        
-        // Check if there's an error in JSON
-        if (jsonData.error) {
-          throw new Error(jsonData.error);
-        }
-        
-        // Check if there's a video URL in response
-        if (jsonData.url || jsonData.video_url || jsonData.videoUrl) {
-          const videoUrlFromApi = jsonData.url || jsonData.video_url || jsonData.videoUrl;
-          setVideoUrl(videoUrlFromApi);
-          setProgress(100);
-          
-          saveToHistory({
-            url: videoUrlFromApi,
-            prompt: prompt.trim(),
-            duration: duration,
-            timestamp: Date.now(),
-          });
-          
-          toast({
-            title: "Success!",
-            description: "Your video has been generated",
-          });
-          return;
-        }
-        
-        throw new Error("Invalid API response format");
+      const jsonData = await response.json();
+      
+      if (!jsonData.success || !jsonData.url) {
+        throw new Error(jsonData.error || "Invalid API response");
       }
 
-      // Handle video blob response
-      if (contentType.includes("video") || contentType.includes("octet-stream")) {
-        const blob = await response.blob();
-        console.log("Blob received:", blob.size, "bytes");
-        
-        if (blob.size === 0) {
-          throw new Error("Received empty video file");
-        }
-        
-        const url = URL.createObjectURL(blob);
-        setVideoUrl(url);
-        setProgress(100);
-
-        saveToHistory({
-          url,
-          prompt: prompt.trim(),
-          duration: duration,
-          timestamp: Date.now(),
-        });
-
-        toast({
-          title: "Success!",
-          description: "Your video has been generated",
-        });
-        return;
-      }
-
-      // If we get here, unknown response type
-      throw new Error(`Unexpected response type: ${contentType}`);
+      const videoUrl = jsonData.url;
+      setVideoUrl(videoUrl);
+      setProgress(100);
+      
+      saveToHistory({
+        url: videoUrl,
+        prompt: prompt.trim(),
+        timestamp: Date.now(),
+      });
+      
+      toast({
+        title: "کامیاب!",
+        description: "آپ کی ویڈیو تیار ہو گئی ہے",
+      });
       
     } catch (error) {
       console.error("Error generating video:", error);
       
-      let errorMessage = "Error generating video. Please try again";
+      let errorMessage = "ویڈیو بنانے میں مسئلہ پیش آیا۔ دوبارہ کوشش کریں";
       
       if (error instanceof Error) {
         if (error.message.includes("Failed to fetch")) {
-          errorMessage = "Network error. Please check your internet connection";
-        } else if (error.message.includes("API Error: 429")) {
-          errorMessage = "Too many requests. Please try again later";
-        } else if (error.message.includes("API Error: 500")) {
-          errorMessage = "Server error. Please try again";
-        } else {
-          errorMessage = error.message;
+          errorMessage = "نیٹ ورک کی خرابی۔ اپنا انٹرنیٹ چیک کریں";
+        } else if (error.message.includes("429")) {
+          errorMessage = "بہت زیادہ کوششیں۔ کچھ دیر بعد کوشش کریں";
+        } else if (error.message.includes("500")) {
+          errorMessage = "سرور کی خرابی۔ دوبارہ کوشش کریں";
         }
       }
       
       toast({
-        title: "Error",
+        title: "خطا",
         description: errorMessage,
         variant: "destructive",
       });
@@ -204,6 +119,41 @@ export const VideoGenerator = () => {
     } finally {
       clearInterval(progressInterval);
       setIsGenerating(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!videoUrl) return;
+    
+    try {
+      toast({
+        title: "ڈاؤن لوڈ شروع ہو رہا ہے...",
+        description: "براہ کرم انتظار کریں",
+      });
+
+      const response = await fetch(videoUrl);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ai-video-${Date.now()}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "ڈاؤن لوڈ کامیاب!",
+        description: "ویڈیو آپ کے ڈیوائس میں محفوظ ہو گئی",
+      });
+    } catch (error) {
+      console.error("Download error:", error);
+      toast({
+        title: "خطا",
+        description: "ڈاؤن لوڈ میں مسئلہ۔ دوبارہ کوشش کریں",
+        variant: "destructive",
+      });
     }
   };
 
@@ -218,15 +168,15 @@ export const VideoGenerator = () => {
           url: window.location.href,
         });
         toast({
-          title: "Shared!",
-          description: "Video shared successfully",
+          title: "شیئر کی گئی!",
+          description: "ویڈیو کامیابی سے شیئر ہوگئی",
         });
       } else {
         // Fallback: copy link
         await navigator.clipboard.writeText(window.location.href);
         toast({
-          title: "Copied!",
-          description: "Link copied to clipboard",
+          title: "کاپی ہوگیا!",
+          description: "لنک clipboard میں کاپی ہوگیا",
         });
       }
     } catch (error) {
@@ -238,8 +188,8 @@ export const VideoGenerator = () => {
     setVideoHistory([]);
     localStorage.removeItem("videoHistory");
     toast({
-      title: "Cleared",
-      description: "All history deleted",
+      title: "صاف ہوگیا",
+      description: "تمام ہسٹری ڈیلیٹ ہوگئی",
     });
   };
 
@@ -250,11 +200,11 @@ export const VideoGenerator = () => {
           <div className="space-y-3">
             <label htmlFor="prompt" className="text-lg font-semibold flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-accent" />
-              Describe your video
+              اپنی ویڈیو کی تفصیل لکھیں
             </label>
             <Textarea
               id="prompt"
-              placeholder="Example: A cat riding a skateboard in space, high resolution"
+              placeholder="مثال: ایک بلی جو خلا میں سکیٹ بورڈ چلا رہی ہے، ہائی ریزولوشن"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-[120px] text-base resize-none bg-background/50 backdrop-blur"
@@ -262,30 +212,10 @@ export const VideoGenerator = () => {
             />
           </div>
 
-          {/* Duration Selection */}
-          <div className="space-y-3">
-            <label className="text-lg font-semibold flex items-center gap-2">
-              <Timer className="h-5 w-5 text-accent" />
-              Video Duration
-            </label>
-            <Select value={duration} onValueChange={setDuration} disabled={isGenerating}>
-              <SelectTrigger className="w-full bg-background/50 backdrop-blur">
-                <SelectValue placeholder="Select duration" />
-              </SelectTrigger>
-              <SelectContent>
-                {durationOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {isGenerating && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Generating...</span>
+                <span className="text-muted-foreground">جنریٹ ہو رہا ہے...</span>
                 <span className="font-semibold">{Math.round(progress)}%</span>
               </div>
               <Progress value={progress} className="h-2" />
@@ -302,12 +232,12 @@ export const VideoGenerator = () => {
             {isGenerating ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Generating Video...
+                ویڈیو بنائی جا رہی ہے...
               </>
             ) : (
               <>
                 <Video className="h-5 w-5" />
-                Generate Video
+                ویڈیو بنائیں
               </>
             )}
           </Button>
@@ -318,7 +248,7 @@ export const VideoGenerator = () => {
       <Card className="p-6 bg-[var(--gradient-card)] backdrop-blur-xl border-border">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-secondary" />
-          Example Prompts
+          مثال کی تفصیلات
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {examplePrompts.map((example, index) => (
@@ -339,18 +269,13 @@ export const VideoGenerator = () => {
         <Card className="p-6 bg-[var(--gradient-card)] backdrop-blur-xl border-border overflow-hidden">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Video className="h-5 w-5 text-primary" />
-            Your Video
+            آپ کی ویڈیو
           </h3>
           
           {currentPrompt && (
-            <div className="mb-4 space-y-2">
-              <p className="text-sm text-muted-foreground p-3 bg-background/30 rounded-lg border border-border/50">
-                <strong>Prompt:</strong> {currentPrompt}
-              </p>
-              <p className="text-sm text-muted-foreground p-3 bg-background/30 rounded-lg border border-border/50">
-                <strong>Duration:</strong> {currentDuration}
-              </p>
-            </div>
+            <p className="text-sm text-muted-foreground mb-4 p-3 bg-background/30 rounded-lg border border-border/50">
+              <strong>Prompt:</strong> {currentPrompt}
+            </p>
           )}
           
           <div className="relative rounded-lg overflow-hidden bg-background/20">
@@ -367,17 +292,12 @@ export const VideoGenerator = () => {
           
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             <Button
-              onClick={() => {
-                const a = document.createElement("a");
-                a.href = videoUrl;
-                a.download = `niro-video-${Date.now()}.mp4`;
-                a.click();
-              }}
+              onClick={handleDownload}
               variant="secondary"
               className="gap-2"
             >
               <Download className="h-4 w-4" />
-              Download
+              ڈاؤن لوڈ
             </Button>
             <Button
               onClick={handleShare}
@@ -385,19 +305,30 @@ export const VideoGenerator = () => {
               className="gap-2"
             >
               <Share2 className="h-4 w-4" />
-              Share
+              شیئر
             </Button>
             <Button
               onClick={() => {
                 setPrompt(currentPrompt);
-                setDuration(currentDuration);
                 handleGenerate();
               }}
               variant="outline"
               className="gap-2"
             >
               <RefreshCw className="h-4 w-4" />
-              Regenerate
+              دوبارہ
+            </Button>
+            <Button
+              onClick={() => {
+                setVideoUrl(null);
+                setPrompt("");
+                setCurrentPrompt("");
+              }}
+              variant="outline"
+              className="gap-2"
+            >
+              <Video className="h-4 w-4" />
+              نئی ویڈیو
             </Button>
           </div>
         </Card>
@@ -409,7 +340,7 @@ export const VideoGenerator = () => {
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold flex items-center gap-2">
               <Clock className="h-5 w-5 text-secondary" />
-              Recent Videos
+              حالیہ ویڈیوز
             </h3>
             <Button
               onClick={clearHistory}
@@ -418,7 +349,7 @@ export const VideoGenerator = () => {
               className="gap-2"
             >
               <Trash2 className="h-4 w-4" />
-              Clear
+              صاف کریں
             </Button>
           </div>
           
@@ -430,9 +361,7 @@ export const VideoGenerator = () => {
                 onClick={() => {
                   setVideoUrl(video.url);
                   setCurrentPrompt(video.prompt);
-                  setCurrentDuration(video.duration);
                   setPrompt(video.prompt);
-                  setDuration(video.duration);
                 }}
               >
                 <video
@@ -441,13 +370,10 @@ export const VideoGenerator = () => {
                   muted
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent flex items-end p-3">
-                  <div className="space-y-1">
-                    <p className="text-xs text-foreground/90 line-clamp-2">{video.prompt}</p>
-                    <p className="text-xs text-foreground/70">{video.duration}</p>
-                  </div>
+                  <p className="text-xs text-foreground/90 line-clamp-2">{video.prompt}</p>
                 </div>
                 <div className="absolute top-2 right-2 bg-background/80 backdrop-blur px-2 py-1 rounded text-xs">
-                  {new Date(video.timestamp).toLocaleDateString()}
+                  {new Date(video.timestamp).toLocaleDateString('ur-PK')}
                 </div>
               </div>
             ))}
