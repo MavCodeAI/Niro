@@ -57,7 +57,6 @@ export const VideoGenerator = () => {
     setProgress(0);
     setCurrentPrompt(prompt);
 
-    // Simulate progress
     const progressInterval = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 90) return prev;
@@ -69,98 +68,32 @@ export const VideoGenerator = () => {
       const encodedPrompt = encodeURIComponent(prompt.trim());
       const apiUrl = `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodedPrompt}`;
       
-      console.log("Fetching video from:", apiUrl);
-      
-      const response = await fetch(apiUrl, {
-        method: "GET",
-      });
-      
-      console.log("Response status:", response.status);
-      console.log("Response content-type:", response.headers.get("content-type"));
+      const response = await fetch(apiUrl);
       
       if (!response.ok) {
-        // Try to get error message from response
-        let errorMessage = `API Error: ${response.status}`;
-        try {
-          const errorText = await response.text();
-          console.log("Error response:", errorText);
-          
-          // Try to parse as JSON
-          try {
-            const errorJson = JSON.parse(errorText);
-            errorMessage = errorJson.error || errorJson.message || errorMessage;
-          } catch {
-            errorMessage = errorText || errorMessage;
-          }
-        } catch {
-          // Ignore if we can't read the error
-        }
-        throw new Error(errorMessage);
+        throw new Error(`API Error: ${response.status}`);
       }
 
-      const contentType = response.headers.get("content-type") || "";
-      console.log("Content type:", contentType);
-
-      // Check if response is JSON (error or URL response)
-      if (contentType.includes("application/json") || contentType.includes("text")) {
-        const jsonData = await response.json();
-        console.log("JSON response:", jsonData);
-        
-        // Check if there's an error in JSON
-        if (jsonData.error) {
-          throw new Error(jsonData.error);
-        }
-        
-        // Check if there's a video URL in response
-        if (jsonData.url || jsonData.video_url || jsonData.videoUrl) {
-          const videoUrlFromApi = jsonData.url || jsonData.video_url || jsonData.videoUrl;
-          setVideoUrl(videoUrlFromApi);
-          setProgress(100);
-          
-          saveToHistory({
-            url: videoUrlFromApi,
-            prompt: prompt.trim(),
-            timestamp: Date.now(),
-          });
-          
-          toast({
-            title: "کامیاب!",
-            description: "آپ کی ویڈیو تیار ہو گئی ہے",
-          });
-          return;
-        }
-        
-        throw new Error("Invalid API response format");
+      const jsonData = await response.json();
+      
+      if (!jsonData.success || !jsonData.url) {
+        throw new Error(jsonData.error || "Invalid API response");
       }
 
-      // Handle video blob response
-      if (contentType.includes("video") || contentType.includes("octet-stream")) {
-        const blob = await response.blob();
-        console.log("Blob received:", blob.size, "bytes");
-        
-        if (blob.size === 0) {
-          throw new Error("Received empty video file");
-        }
-        
-        const url = URL.createObjectURL(blob);
-        setVideoUrl(url);
-        setProgress(100);
-
-        saveToHistory({
-          url,
-          prompt: prompt.trim(),
-          timestamp: Date.now(),
-        });
-
-        toast({
-          title: "کامیاب!",
-          description: "آپ کی ویڈیو تیار ہو گئی ہے",
-        });
-        return;
-      }
-
-      // If we get here, unknown response type
-      throw new Error(`Unexpected response type: ${contentType}`);
+      const videoUrl = jsonData.url;
+      setVideoUrl(videoUrl);
+      setProgress(100);
+      
+      saveToHistory({
+        url: videoUrl,
+        prompt: prompt.trim(),
+        timestamp: Date.now(),
+      });
+      
+      toast({
+        title: "کامیاب!",
+        description: "آپ کی ویڈیو تیار ہو گئی ہے",
+      });
       
     } catch (error) {
       console.error("Error generating video:", error);
@@ -170,12 +103,10 @@ export const VideoGenerator = () => {
       if (error instanceof Error) {
         if (error.message.includes("Failed to fetch")) {
           errorMessage = "نیٹ ورک کی خرابی۔ اپنا انٹرنیٹ چیک کریں";
-        } else if (error.message.includes("API Error: 429")) {
+        } else if (error.message.includes("429")) {
           errorMessage = "بہت زیادہ کوششیں۔ کچھ دیر بعد کوشش کریں";
-        } else if (error.message.includes("API Error: 500")) {
+        } else if (error.message.includes("500")) {
           errorMessage = "سرور کی خرابی۔ دوبارہ کوشش کریں";
-        } else {
-          errorMessage = error.message;
         }
       }
       
@@ -188,6 +119,41 @@ export const VideoGenerator = () => {
     } finally {
       clearInterval(progressInterval);
       setIsGenerating(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!videoUrl) return;
+    
+    try {
+      toast({
+        title: "ڈاؤن لوڈ شروع ہو رہا ہے...",
+        description: "براہ کرم انتظار کریں",
+      });
+
+      const response = await fetch(videoUrl);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ai-video-${Date.now()}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "ڈاؤن لوڈ کامیاب!",
+        description: "ویڈیو آپ کے ڈیوائس میں محفوظ ہو گئی",
+      });
+    } catch (error) {
+      console.error("Download error:", error);
+      toast({
+        title: "خطا",
+        description: "ڈاؤن لوڈ میں مسئلہ۔ دوبارہ کوشش کریں",
+        variant: "destructive",
+      });
     }
   };
 
@@ -326,12 +292,7 @@ export const VideoGenerator = () => {
           
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             <Button
-              onClick={() => {
-                const a = document.createElement("a");
-                a.href = videoUrl;
-                a.download = `ai-video-${Date.now()}.mp4`;
-                a.click();
-              }}
+              onClick={handleDownload}
               variant="secondary"
               className="gap-2"
             >
