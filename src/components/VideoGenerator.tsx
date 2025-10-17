@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, Camera, Info } from "lucide-react";
+import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, Camera } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 
@@ -13,13 +13,7 @@ interface GeneratedVideo {
   prompt: string;
   cameraControl?: string;
   timestamp: number;
-  quality: keyof typeof VIDEO_QUALITY_LEVELS;
 }
-
-const VIDEO_QUALITY_LEVELS = {
-  STANDARD: { name: 'Standard Quality (Fast)' },
-  HIGH: { name: 'High Quality (Slower)' },
-};
 
 const CAMERA_CONTROLS = {
   NONE: "None",
@@ -43,7 +37,7 @@ const FALLBACK_PROMPTS = [
 
 export const VideoGenerator = () => {
   const [prompt, setPrompt] = useState("");
-  // Negative prompt is now a fixed value, hidden from the user.
+  // Negative prompt is a fixed value, hidden from the user.
   const [negativePrompt] = useState("blurry, low quality, text, watermark, grainy, deformed, ugly");
   const [cameraControl, setCameraControl] = useState<keyof typeof CAMERA_CONTROLS>("NONE");
   
@@ -52,7 +46,6 @@ export const VideoGenerator = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<GeneratedVideo[]>([]);
-  const [selectedQuality, setSelectedQuality] = useState<keyof typeof VIDEO_QUALITY_LEVELS>('STANDARD');
   const [examplePrompts, setExamplePrompts] = useState<string[]>(FALLBACK_PROMPTS);
 
   useEffect(() => {
@@ -73,29 +66,21 @@ export const VideoGenerator = () => {
     if (cameraControl !== 'NONE') {
       finalPrompt += `, ${CAMERA_CONTROLS[cameraControl]}`;
     }
-    // The fixed negative prompt is always added in the background.
     if (negativePrompt.trim()) {
       finalPrompt += ` | avoid: ${negativePrompt}`;
     }
     return finalPrompt;
   };
 
+  // Simplified to use only one provider (Yabes)
   const generateVideo = async (fullPrompt: string): Promise<string> => {
-    const apiEndpoint = selectedQuality === 'HIGH'
-      ? `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=1024&height=576&seed=${Date.now()}`
-      : `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodeURIComponent(fullPrompt)}`;
-
+    const apiEndpoint = `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodeURIComponent(fullPrompt)}`;
     const response = await fetch(apiEndpoint);
     if (!response.ok) throw new Error('Video generation API request failed');
-
-    if (selectedQuality === 'HIGH') {
-        const blob = await response.blob();
-        return URL.createObjectURL(blob);
-    } else {
-        const data = await response.json();
-        if (!data.success || !data.url) throw new Error(data.error || 'Invalid video API response');
-        return data.url;
-    }
+    
+    const data = await response.json();
+    if (!data.success || !data.url) throw new Error(data.error || 'Invalid video API response');
+    return data.url;
   };
 
   const handleGenerate = async () => {
@@ -109,7 +94,7 @@ export const VideoGenerator = () => {
     setProgress(0);
     
     const finalPrompt = buildFinalPrompt();
-    const newVideoData: Omit<GeneratedVideo, 'url' | 'timestamp'> = { prompt, cameraControl, quality: selectedQuality };
+    const newVideoData: Omit<GeneratedVideo, 'url' | 'timestamp'> = { prompt, cameraControl };
     
     const progressInterval = setInterval(() => setProgress(p => (p >= 95 ? p : p + Math.random() * 10)), 800);
 
@@ -156,7 +141,6 @@ export const VideoGenerator = () => {
     setVideoUrl(video.url);
     setPrompt(video.prompt);
     setCameraControl(video.cameraControl as keyof typeof CAMERA_CONTROLS || "NONE");
-    setSelectedQuality(video.quality);
     setCurrentVideo(video);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -180,35 +164,16 @@ export const VideoGenerator = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center gap-2"><Camera className="h-4 w-4" />Camera Control</label>
-              <Select value={cameraControl} onValueChange={(v) => setCameraControl(v as keyof typeof CAMERA_CONTROLS)} disabled={isGenerating}>
-                <SelectTrigger className="bg-background/70"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(CAMERA_CONTROLS).map(([key, name]) => (
-                    <SelectItem key={key} value={key}>{name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Video Quality</label>
-              <Select value={selectedQuality} onValueChange={(v) => setSelectedQuality(v as keyof typeof VIDEO_QUALITY_LEVELS)} disabled={isGenerating}>
-                <SelectTrigger className="bg-background/70"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(VIDEO_QUALITY_LEVELS).map(([key, quality]) => (
-                    <SelectItem key={key} value={key}>{quality.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3 p-3 bg-primary/10 border border-primary/20 rounded-lg">
-            <Info className="h-5 w-5 text-primary flex-shrink-0" />
-            <p className="text-xs text-primary/90">Our tool uses multiple providers to ensure your video is always generated, even if one service is busy.</p>
+          <div className="space-y-2">
+            <label className="text-sm font-medium flex items-center gap-2"><Camera className="h-4 w-4" />Camera Control</label>
+            <Select value={cameraControl} onValueChange={(v) => setCameraControl(v as keyof typeof CAMERA_CONTROLS)} disabled={isGenerating}>
+              <SelectTrigger className="bg-background/70"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(CAMERA_CONTROLS).map(([key, name]) => (
+                  <SelectItem key={key} value={key}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {isGenerating && (
