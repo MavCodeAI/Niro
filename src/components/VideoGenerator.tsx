@@ -7,7 +7,7 @@ import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, C
 import { toast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 
-// (Interfaces and constants remain the same)
+// Define interfaces for history and other objects
 interface GeneratedVideo {
   url: string;
   prompt: string;
@@ -32,11 +32,17 @@ const CAMERA_CONTROLS = {
   TILT_DOWN: "Tilt Down",
 };
 
-const HUGGING_FACE_API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct";
-const HUGGING_FACE_TOKEN = ""; // Optional
+// Static fallback prompts
+const FALLBACK_PROMPTS = [
+    "A majestic eagle soaring over mountains, cinematic lighting",
+    "Ocean waves crashing on a sunny beach, hyperrealistic",
+    "A futuristic city with flying cars at night, neon-drenched",
+    "A quiet, enchanted forest with glowing mushrooms",
+    "A time-lapse of a flower blooming, vibrant colors",
+    "A cat playfully chasing a shimmering butterfly",
+];
 
 export const VideoGenerator = () => {
-  // (State variables remain the same)
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("blurry, low quality, text, watermark, grainy, deformed");
   const [cameraControl, setCameraControl] = useState<keyof typeof CAMERA_CONTROLS>("NONE");
@@ -47,62 +53,15 @@ export const VideoGenerator = () => {
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<GeneratedVideo[]>([]);
   const [selectedQuality, setSelectedQuality] = useState<keyof typeof VIDEO_QUALITY_LEVELS>('STANDARD');
-  const [examplePrompts, setExamplePrompts] = useState<string[]>(["Loading AI ideas..."]);
-
-  const getFallbackPrompts = () => [
-    "A majestic eagle soaring over mountains, cinematic lighting",
-    "Ocean waves crashing on a sunny beach, hyperrealistic",
-    "A futuristic city with flying cars at night, neon-drenched",
-    "A quiet, enchanted forest with glowing mushrooms",
-    "A time-lapse of a flower blooming, vibrant colors",
-    "A cat playfully chasing a shimmering butterfly",
-  ];
-
-  const getDynamicExamples = async () => {
-    try {
-      const messages = [
-        { role: "system", content: "You are a creative assistant. Generate 6 short, visually interesting video prompt ideas. Each idea should be on a new line. Do not use numbering or bullet points. Output only the prompts." },
-        { role: "user", content: "Generate ideas." }
-      ];
-      const response = await fetch(HUGGING_FACE_API_URL, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(HUGGING_FACE_TOKEN && { Authorization: HUGGING_FACE_TOKEN })
-        },
-        body: JSON.stringify({ 
-          inputs: messages,
-          parameters: { max_new_tokens: 150, return_full_text: false }
-        }),
-      });
-      if (!response.ok) throw new Error("Failed to fetch examples");
-      const data = await response.json();
-      const prompts = data[0].generated_text.split('\n').filter(p => p.trim() !== '');
-      setExamplePrompts(prompts.length > 3 ? prompts : getFallbackPrompts());
-    } catch (error) {
-      console.error("Failed to get dynamic examples:", error);
-      setExamplePrompts(getFallbackPrompts());
-    }
-  };
+  const [examplePrompts, setExamplePrompts] = useState<string[]>(FALLBACK_PROMPTS);
 
   useEffect(() => {
     const savedHistory = localStorage.getItem("videoHistory");
-    if (savedHistory) setVideoHistory(JSON.parse(savedHistory));
-    getDynamicExamples();
+    if (savedHistory) {
+      setVideoHistory(JSON.parse(savedHistory));
+    }
   }, []);
 
-  // --- DOWNLOAD FIX ---
-  // This function now opens the video in a new tab for easy saving.
-  const handleDownload = () => {
-    if (!videoUrl) return;
-    window.open(videoUrl, '_blank');
-    toast({
-      title: "Opening Video in New Tab",
-      description: "Right-click on the video and choose 'Save video as...' to download.",
-    });
-  };
-
-  // (All other functions remain the same)
   const saveToHistory = (video: GeneratedVideo) => {
     const newHistory = [video, ...videoHistory].slice(0, 10);
     setVideoHistory(newHistory);
@@ -111,8 +70,12 @@ export const VideoGenerator = () => {
 
   const buildFinalPrompt = () => {
     let finalPrompt = prompt;
-    if (cameraControl !== 'NONE') finalPrompt += `, ${CAMERA_CONTROLS[cameraControl]}`;
-    if (negativePrompt.trim()) finalPrompt += ` | avoid: ${negativePrompt}`;
+    if (cameraControl !== 'NONE') {
+      finalPrompt += `, ${CAMERA_CONTROLS[cameraControl]}`;
+    }
+    if (negativePrompt.trim()) {
+      finalPrompt += ` | avoid: ${negativePrompt}`;
+    }
     return finalPrompt;
   };
 
@@ -166,6 +129,15 @@ export const VideoGenerator = () => {
     clearInterval(progressInterval);
     setIsGenerating(false);
   };
+
+  const handleDownload = () => {
+    if (!videoUrl) return;
+    window.open(videoUrl, '_blank');
+    toast({
+      title: "Opening Video in New Tab",
+      description: "Right-click on the video and choose 'Save video as...' to download.",
+    });
+  };
   
   const handleShare = async () => {
     if (!videoUrl) return;
@@ -189,16 +161,14 @@ export const VideoGenerator = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8 p-4">
       <Card className="p-6 md:p-8 bg-card/50 backdrop-blur-lg border-border/20 shadow-lg">
         <div className="space-y-6">
-          {/* Sound Info Box */}
           <div className="flex items-center gap-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
             <Music className="h-5 w-5 text-yellow-500 flex-shrink-0" />
             <p className="text-xs text-yellow-500/90">
-              <strong>Note:</strong> The generated videos are silent. Sound generation is a separate feature that can be added later.
+              <strong>Note:</strong> The generated videos are silent. Sound can be added as a future feature.
             </p>
           </div>
 
@@ -280,7 +250,7 @@ export const VideoGenerator = () => {
       </Card>
 
       <Card className="p-6 bg-card/50 backdrop-blur-lg border-border/20 shadow-lg">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><Sparkles className="h-5 w-5 text-accent" />AI-Generated Ideas</h3>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><Sparkles className="h-5 w-5 text-accent" />Example Ideas</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {examplePrompts.map((example, index) => (
             <button key={index} onClick={() => setPrompt(example)} className="text-left p-3 rounded-lg bg-background/50 hover:bg-background border transition-colors text-sm" disabled={isGenerating}>
