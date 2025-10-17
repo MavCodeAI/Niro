@@ -7,7 +7,7 @@ import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, C
 import { toast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 
-// Define interfaces for history and other objects
+// (Interfaces, Constants, etc. remain the same)
 interface GeneratedVideo {
   url: string;
   prompt: string;
@@ -25,7 +25,6 @@ const CAMERA_CONTROLS = {
   TILT_DOWN: "Tilt Down",
 };
 
-// Static fallback prompts
 const FALLBACK_PROMPTS = [
     "A majestic eagle soaring over mountains, cinematic lighting",
     "Ocean waves crashing on a sunny beach, hyperrealistic",
@@ -37,50 +36,83 @@ const FALLBACK_PROMPTS = [
 
 export const VideoGenerator = () => {
   const [prompt, setPrompt] = useState("");
-  // Negative prompt is a fixed value, hidden from the user.
   const [negativePrompt] = useState("blurry, low quality, text, watermark, grainy, deformed, ugly");
   const [cameraControl, setCameraControl] = useState<keyof typeof CAMERA_CONTROLS>("NONE");
   
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [currentVideo, setCurrentVideo] = useState<GeneratedVideo | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [statusText, setStatusText] = useState("");
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<GeneratedVideo[]>([]);
-  const [examplePrompts, setExamplePrompts] = useState<string[]>(FALLBACK_PROMPTS);
+  const [examplePrompts] = useState<string[]>(FALLBACK_PROMPTS);
 
-  useEffect(() => {
-    const savedHistory = localStorage.getItem("videoHistory");
-    if (savedHistory) {
-      setVideoHistory(JSON.parse(savedHistory));
-    }
-  }, []);
+  // --- NEW: Function to apply a moving watermark ---
+  const applyWatermark = async (videoSrc: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.src = videoSrc;
+      video.crossOrigin = "anonymous"; // Necessary for loading external media in canvas
 
-  const saveToHistory = (video: GeneratedVideo) => {
-    const newHistory = [video, ...videoHistory].slice(0, 10);
-    setVideoHistory(newHistory);
-    localStorage.setItem("videoHistory", JSON.stringify(newHistory));
-  };
+      video.onloadeddata = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error("Canvas context not available"));
 
-  const buildFinalPrompt = () => {
-    let finalPrompt = prompt;
-    if (cameraControl !== 'NONE') {
-      finalPrompt += `, ${CAMERA_CONTROLS[cameraControl]}`;
-    }
-    if (negativePrompt.trim()) {
-      finalPrompt += ` | avoid: ${negativePrompt}`;
-    }
-    return finalPrompt;
-  };
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
 
-  // Simplified to use only one provider (Yabes)
-  const generateVideo = async (fullPrompt: string): Promise<string> => {
-    const apiEndpoint = `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodeURIComponent(fullPrompt)}`;
-    const response = await fetch(apiEndpoint);
-    if (!response.ok) throw new Error('Video generation API request failed');
-    
-    const data = await response.json();
-    if (!data.success || !data.url) throw new Error(data.error || 'Invalid video API response');
-    return data.url;
+        const stream = canvas.captureStream();
+        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+        const chunks: Blob[] = [];
+
+        recorder.ondataavailable = (e) => chunks.push(e.data);
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: 'video/webm' });
+          resolve(URL.createObjectURL(blob));
+        };
+        recorder.onerror = reject;
+
+        recorder.start();
+
+        let frameCount = 0;
+        const totalFrames = video.duration * 30; // Assuming 30fps
+        const watermarkPositions = [
+          { x: 0.95, y: 0.10, align: 'right' }, // Top-right
+          { x: 0.05, y: 0.90, align: 'left' },  // Bottom-left
+          { x: 0.95, y: 0.90, align: 'right' }, // Bottom-right
+          { x: 0.05, y: 0.10, align: 'left' },  // Top-left
+        ];
+        
+        const drawFrame = () => {
+          if (video.paused || video.ended) {
+            recorder.stop();
+            return;
+          }
+          
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          // Watermark style
+          const fontSize = Math.max(16, canvas.width / 50);
+          ctx.font = `bold ${fontSize}px Arial`;
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; // Semi-transparent white
+
+          // Change position every 2 seconds
+          const posIndex = Math.floor(video.currentTime / 2) % watermarkPositions.length;
+          const pos = watermarkPositions[posIndex];
+          ctx.textAlign = pos.align as CanvasTextAlign;
+          ctx.fillText("Nero", canvas.width * pos.x, canvas.height * pos.y);
+          
+          frameCount++;
+          requestAnimationFrame(drawFrame);
+        };
+
+        video.play();
+        drawFrame();
+      };
+
+      video.onerror = () => reject(new Error("Failed to load video for watermarking."));
+    });
   };
 
   const handleGenerate = async () => {
@@ -93,36 +125,72 @@ export const VideoGenerator = () => {
     setVideoUrl(null);
     setProgress(0);
     
-    const finalPrompt = buildFinalPrompt();
-    const newVideoData: Omit<GeneratedVideo, 'url' | 'timestamp'> = { prompt, cameraControl };
-    
-    const progressInterval = setInterval(() => setProgress(p => (p >= 95 ? p : p + Math.random() * 10)), 800);
-
     try {
-      const url = await generateVideo(finalPrompt);
-      const generatedVideo: GeneratedVideo = { ...newVideoData, url, timestamp: Date.now() };
-      setVideoUrl(url);
-      setCurrentVideo(generatedVideo);
+      // Step 1: Generate the video
+      setStatusText("Generating video...");
+      const finalPrompt = buildFinalPrompt();
+      const rawVideoUrl = await generateVideo(finalPrompt);
+      setProgress(50);
+      
+      // Step 2: Apply the watermark
+      setStatusText("Applying watermark...");
+      const watermarkedVideoUrl = await applyWatermark(rawVideoUrl);
       setProgress(100);
-      saveToHistory(generatedVideo);
-      toast({ title: "Success! 🎉", description: "Your video has been generated." });
+      
+      const newVideoData: GeneratedVideo = { prompt, cameraControl, url: watermarkedVideoUrl, timestamp: Date.now() };
+      setVideoUrl(watermarkedVideoUrl);
+      setCurrentVideo(newVideoData);
+      saveToHistory(newVideoData);
+      
+      toast({ title: "Success! 🎉", description: "Your watermarked video is ready." });
+
     } catch (error) {
       console.error("Generation failed:", error);
-      toast({ title: "Generation Failed", description: "The video service is busy. Please try again.", variant: "destructive" });
+      toast({ title: "Generation Failed", description: "An error occurred. Please try again.", variant: "destructive" });
       setProgress(0);
     }
 
-    clearInterval(progressInterval);
     setIsGenerating(false);
+    setStatusText("");
+  };
+
+  // --- The rest of the functions (buildFinalPrompt, generateVideo, etc.) remain the same ---
+  useEffect(() => {
+    const savedHistory = localStorage.getItem("videoHistory");
+    if (savedHistory) setVideoHistory(JSON.parse(savedHistory));
+  }, []);
+
+  const saveToHistory = (video: GeneratedVideo) => {
+    const newHistory = [video, ...videoHistory].slice(0, 10);
+    setVideoHistory(newHistory);
+    localStorage.setItem("videoHistory", JSON.stringify(newHistory));
+  };
+
+  const buildFinalPrompt = () => {
+    let finalPrompt = prompt;
+    if (cameraControl !== 'NONE') finalPrompt += `, ${CAMERA_CONTROLS[cameraControl]}`;
+    if (negativePrompt.trim()) finalPrompt += ` | avoid: ${negativePrompt}`;
+    return finalPrompt;
+  };
+
+  const generateVideo = async (fullPrompt: string): Promise<string> => {
+    const apiEndpoint = `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodeURIComponent(fullPrompt)}`;
+    const response = await fetch(apiEndpoint);
+    if (!response.ok) throw new Error('Video generation API request failed');
+    const data = await response.json();
+    if (!data.success || !data.url) throw new Error(data.error || 'Invalid API response');
+    return data.url;
   };
 
   const handleDownload = () => {
     if (!videoUrl) return;
-    window.open(videoUrl, '_blank');
-    toast({
-      title: "Opening Video in New Tab",
-      description: "Right-click on the video and choose 'Save video as...' to download.",
-    });
+    const a = document.createElement('a');
+    a.href = videoUrl;
+    a.download = `nero-ai-video-${Date.now()}.webm`;
+    document.body.appendChild(a);
+a.click();
+    document.body.removeChild(a);
+    toast({ title: "Download Started", description: "Your video is being saved." });
   };
   
   const handleShare = async () => {
@@ -134,7 +202,7 @@ export const VideoGenerator = () => {
   const clearHistory = () => {
     setVideoHistory([]);
     localStorage.removeItem("videoHistory");
-    toast({ title: "History Cleared", description: "Your recent videos have been deleted." });
+    toast({ title: "History Cleared" });
   };
 
   const loadFromHistory = (video: GeneratedVideo) => {
@@ -179,7 +247,7 @@ export const VideoGenerator = () => {
           {isGenerating && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Generating your masterpiece...</span>
+                <span className="text-muted-foreground">{statusText || "Processing..."}</span>
                 <span className="font-semibold">{Math.round(progress)}%</span>
               </div>
               <Progress value={progress} className="h-2" />
