@@ -45,8 +45,8 @@ export const VideoGenerator = () => {
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast({
-        title: "خطا",
-        description: "براہ کرم ویڈیو کی تفصیل درج کریں",
+        title: "Error",
+        description: "Please enter a description for the video",
         variant: "destructive",
       });
       return;
@@ -91,27 +91,27 @@ export const VideoGenerator = () => {
       });
       
       toast({
-        title: "کامیاب!",
-        description: "آپ کی ویڈیو تیار ہو گئی ہے",
+        title: "Success!",
+        description: "Your video is ready",
       });
       
     } catch (error) {
       console.error("Error generating video:", error);
       
-      let errorMessage = "ویڈیو بنانے میں مسئلہ پیش آیا۔ دوبارہ کوشش کریں";
+      let errorMessage = "There was a problem generating the video. Please try again.";
       
       if (error instanceof Error) {
         if (error.message.includes("Failed to fetch")) {
-          errorMessage = "نیٹ ورک کی خرابی۔ اپنا انٹرنیٹ چیک کریں";
+          errorMessage = "Network error. Please check your internet connection.";
         } else if (error.message.includes("429")) {
-          errorMessage = "بہت زیادہ کوششیں۔ کچھ دیر بعد کوشش کریں";
+          errorMessage = "Too many requests. Please try again later.";
         } else if (error.message.includes("500")) {
-          errorMessage = "سرور کی خرابی۔ دوبارہ کوشش کریں";
+          errorMessage = "Server error. Please try again.";
         }
       }
       
       toast({
-        title: "خطا",
+        title: "Error",
         description: errorMessage,
         variant: "destructive",
       });
@@ -127,8 +127,8 @@ export const VideoGenerator = () => {
     
     try {
       toast({
-        title: "ڈاؤن لوڈ شروع ہو رہا ہے...",
-        description: "براہ کرم انتظار کریں",
+        title: "Starting download...",
+        description: "Please wait",
       });
 
       const response = await fetch(videoUrl);
@@ -144,14 +144,14 @@ export const VideoGenerator = () => {
       URL.revokeObjectURL(url);
       
       toast({
-        title: "ڈاؤن لوڈ کامیاب!",
-        description: "ویڈیو آپ کے ڈیوائس میں محفوظ ہو گئی",
+        title: "Download successful!",
+        description: "The video has been saved to your device",
       });
     } catch (error) {
       console.error("Download error:", error);
       toast({
-        title: "خطا",
-        description: "ڈاؤن لوڈ میں مسئلہ۔ دوبارہ کوشش کریں",
+        title: "Error",
+        description: "There was an issue downloading the video. Please try again.",
         variant: "destructive",
       });
     }
@@ -168,15 +168,15 @@ export const VideoGenerator = () => {
           url: window.location.href,
         });
         toast({
-          title: "شیئر کی گئی!",
-          description: "ویڈیو کامیابی سے شیئر ہوگئی",
+          title: "Shared!",
+          description: "The video was shared successfully",
         });
       } else {
         // Fallback: copy link
         await navigator.clipboard.writeText(window.location.href);
         toast({
-          title: "کاپی ہوگیا!",
-          description: "لنک clipboard میں کاپی ہوگیا",
+          title: "Copied!",
+          description: "Link copied to clipboard",
         });
       }
     } catch (error) {
@@ -188,8 +188,8 @@ export const VideoGenerator = () => {
     setVideoHistory([]);
     localStorage.removeItem("videoHistory");
     toast({
-      title: "صاف ہوگیا",
-      description: "تمام ہسٹری ڈیلیٹ ہوگئی",
+      title: "Cleared",
+      description: "All history has been deleted",
     });
   };
 
@@ -200,11 +200,11 @@ export const VideoGenerator = () => {
           <div className="space-y-3">
             <label htmlFor="prompt" className="text-lg font-semibold flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-accent" />
-              اپنی ویڈیو کی تفصیل لکھیں
+              Write your video description
             </label>
             <Textarea
               id="prompt"
-              placeholder="مثال: ایک بلی جو خلا میں سکیٹ بورڈ چلا رہی ہے، ہائی ریزولوشن"
+              placeholder="Example: A cat riding a skateboard in space, high resolution"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-[120px] text-base resize-none bg-background/50 backdrop-blur"
@@ -215,7 +215,7 @@ export const VideoGenerator = () => {
           {isGenerating && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">جنریٹ ہو رہا ہے...</span>
+                <span className="text-muted-foreground">Generating...</span>
                 <span className="font-semibold">{Math.round(progress)}%</span>
               </div>
               <Progress value={progress} className="h-2" />
@@ -232,12 +232,12 @@ export const VideoGenerator = () => {
             {isGenerating ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                ویڈیو بنائی جا رہی ہے...
+                Generating video...
               </>
             ) : (
               <>
                 <Video className="h-5 w-5" />
-                ویڈیو بنائیں
+                Generate Video
               </>
             )}
           </Button>
@@ -248,7 +248,7 @@ export const VideoGenerator = () => {
       <Card className="p-6 bg-[var(--gradient-card)] backdrop-blur-xl border-border">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-secondary" />
-          مثال کی تفصیلات
+          Example Prompts
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {examplePrompts.map((example, index) => (
@@ -269,7 +269,7 @@ export const VideoGenerator = () => {
         <Card className="p-6 bg-[var(--gradient-card)] backdrop-blur-xl border-border overflow-hidden">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Video className="h-5 w-5 text-primary" />
-            آپ کی ویڈیو
+            Your Video
           </h3>
           
           {currentPrompt && (
@@ -297,7 +297,7 @@ export const VideoGenerator = () => {
               className="gap-2"
             >
               <Download className="h-4 w-4" />
-              ڈاؤن لوڈ
+              Download
             </Button>
             <Button
               onClick={handleShare}
@@ -305,7 +305,7 @@ export const VideoGenerator = () => {
               className="gap-2"
             >
               <Share2 className="h-4 w-4" />
-              شیئر
+              Share
             </Button>
             <Button
               onClick={() => {
@@ -316,7 +316,7 @@ export const VideoGenerator = () => {
               className="gap-2"
             >
               <RefreshCw className="h-4 w-4" />
-              دوبارہ
+              Regenerate
             </Button>
             <Button
               onClick={() => {
@@ -328,7 +328,7 @@ export const VideoGenerator = () => {
               className="gap-2"
             >
               <Video className="h-4 w-4" />
-              نئی ویڈیو
+              New Video
             </Button>
           </div>
         </Card>
@@ -340,7 +340,7 @@ export const VideoGenerator = () => {
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold flex items-center gap-2">
               <Clock className="h-5 w-5 text-secondary" />
-              حالیہ ویڈیوز
+              Recent Videos
             </h3>
             <Button
               onClick={clearHistory}
@@ -349,7 +349,7 @@ export const VideoGenerator = () => {
               className="gap-2"
             >
               <Trash2 className="h-4 w-4" />
-              صاف کریں
+              Clear
             </Button>
           </div>
           
@@ -373,7 +373,7 @@ export const VideoGenerator = () => {
                   <p className="text-xs text-foreground/90 line-clamp-2">{video.prompt}</p>
                 </div>
                 <div className="absolute top-2 right-2 bg-background/80 backdrop-blur px-2 py-1 rounded text-xs">
-                  {new Date(video.timestamp).toLocaleDateString('ur-PK')}
+                  {new Date(video.timestamp).toLocaleDateString('en-US')}
                 </div>
               </div>
             ))}
