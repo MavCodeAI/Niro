@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, Timer } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 
@@ -10,12 +11,14 @@ interface GeneratedVideo {
   url: string;
   prompt: string;
   timestamp: number;
+  duration: string;
 }
 
 export const VideoGenerator = () => {
   const [prompt, setPrompt] = useState("");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState("");
+  const [duration, setDuration] = useState("4");
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<GeneratedVideo[]>([]);
@@ -36,10 +39,12 @@ export const VideoGenerator = () => {
   };
 
   const examplePrompts = [
-    "A cat riding a skateboard in space, high resolution",
-    "Sunset over mountains with birds flying, cinematic",
-    "Robot dancing in a futuristic city, neon lights",
-    "Ocean waves crashing on a beach at golden hour",
+    "A majestic eagle soaring over snow-capped mountains at sunset",
+    "Cyberpunk city with neon lights and flying cars in the rain",
+    "Ocean waves crashing against coastal cliffs during a storm",
+    "Astronaut floating in space with Earth in the background",
+    "Cherry blossoms falling in a peaceful Japanese garden",
+    "Lightning illuminating a dark forest during thunderstorm"
   ];
 
   const handleGenerate = async () => {
@@ -66,7 +71,7 @@ export const VideoGenerator = () => {
 
     try {
       const encodedPrompt = encodeURIComponent(prompt.trim());
-      const apiUrl = `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodedPrompt}`;
+      const apiUrl = `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodedPrompt}&duration=${duration}`;
       
       const response = await fetch(apiUrl);
       
@@ -88,6 +93,7 @@ export const VideoGenerator = () => {
         url: videoUrl,
         prompt: prompt.trim(),
         timestamp: Date.now(),
+        duration: duration,
       });
       
       toast({
@@ -200,16 +206,34 @@ export const VideoGenerator = () => {
           <div className="space-y-3">
             <label htmlFor="prompt" className="text-lg font-semibold flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-accent" />
-              Write your video description
+              Describe your video
             </label>
             <Textarea
               id="prompt"
-              placeholder="Example: A cat riding a skateboard in space, high resolution"
+              placeholder="Example: A majestic eagle soaring over snow-capped mountains at sunset"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-[120px] text-base resize-none bg-background/50 backdrop-blur"
               disabled={isGenerating}
             />
+          </div>
+
+          <div className="space-y-3">
+            <label htmlFor="duration" className="text-base font-semibold flex items-center gap-2">
+              <Timer className="h-4 w-4 text-secondary" />
+              Video Duration
+            </label>
+            <Select value={duration} onValueChange={setDuration} disabled={isGenerating}>
+              <SelectTrigger className="w-full bg-background/50 backdrop-blur">
+                <SelectValue placeholder="Select duration" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="4">4 seconds - Quick preview</SelectItem>
+                <SelectItem value="8">8 seconds - Short clip</SelectItem>
+                <SelectItem value="15">15 seconds - Standard video</SelectItem>
+                <SelectItem value="30">30 seconds - Extended clip</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {isGenerating && (
@@ -250,7 +274,7 @@ export const VideoGenerator = () => {
           <Sparkles className="h-5 w-5 text-secondary" />
           Example Prompts
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {examplePrompts.map((example, index) => (
             <button
               key={index}
@@ -323,6 +347,7 @@ export const VideoGenerator = () => {
                 setVideoUrl(null);
                 setPrompt("");
                 setCurrentPrompt("");
+                setDuration("4");
               }}
               variant="outline"
               className="gap-2"
@@ -362,6 +387,7 @@ export const VideoGenerator = () => {
                   setVideoUrl(video.url);
                   setCurrentPrompt(video.prompt);
                   setPrompt(video.prompt);
+                  setDuration(video.duration || "4");
                 }}
               >
                 <video
@@ -370,7 +396,10 @@ export const VideoGenerator = () => {
                   muted
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent flex items-end p-3">
-                  <p className="text-xs text-foreground/90 line-clamp-2">{video.prompt}</p>
+                  <div className="space-y-1">
+                    <p className="text-xs text-foreground/90 line-clamp-2">{video.prompt}</p>
+                    <p className="text-xs text-muted-foreground">{video.duration || '4'}s duration</p>
+                  </div>
                 </div>
                 <div className="absolute top-2 right-2 bg-background/80 backdrop-blur px-2 py-1 rounded text-xs">
                   {new Date(video.timestamp).toLocaleDateString('en-US')}
