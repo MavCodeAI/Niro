@@ -32,12 +32,14 @@ const CAMERA_CONTROLS = {
   TILT_DOWN: "Tilt Down",
 };
 
-// The new Google AI API Key has been updated here
-const GOOGLE_AI_API_KEY = "AIzaSyClIUDwcotN1WuFLdL9ac6GJhuiZ234Foo";
+// --- UPGRADED MODEL ---
+// Using Meta's Llama-3 8B Instruct model for higher quality prompt generation
+const HUGGING_FACE_API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct";
+const HUGGING_FACE_TOKEN = ""; // Optional but recommended for higher rate limits: "Bearer hf_..."
 
 export const VideoGenerator = () => {
   const [prompt, setPrompt] = useState("");
-  const [negativePrompt, setNegativePrompt] = useState("blurry, low quality, text, watermark, grainy");
+  const [negativePrompt, setNegativePrompt] = useState("blurry, low quality, text, watermark, grainy, deformed");
   const [cameraControl, setCameraControl] = useState<keyof typeof CAMERA_CONTROLS>("NONE");
   
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -49,68 +51,88 @@ export const VideoGenerator = () => {
   const [selectedQuality, setSelectedQuality] = useState<keyof typeof VIDEO_QUALITY_LEVELS>('STANDARD');
   const [examplePrompts, setExamplePrompts] = useState<string[]>(["Loading AI ideas..."]);
 
-  // Function to enhance prompt using Google AI
+  const getFallbackPrompts = () => [
+    "A majestic eagle soaring over mountains, cinematic lighting",
+    "Ocean waves crashing on a sunny beach, hyperrealistic",
+    "A futuristic city with flying cars at night, neon-drenched, Blade Runner style",
+    "A quiet, enchanted forest with glowing mushrooms and sunbeams",
+    "A time-lapse of a flower blooming, vibrant colors, macro shot",
+    "A cat playfully chasing a shimmering butterfly in a garden",
+  ];
+
+  // Function to enhance prompt using Llama-3
   const enhancePromptWithAI = async () => {
     if (!prompt.trim()) {
-      toast({
-        title: "Prompt is empty",
-        description: "Write a simple idea first, then enhance it with AI.",
-        variant: "destructive",
-      });
+      toast({ title: "Prompt is empty", description: "Write a simple idea first, then enhance it with AI.", variant: "destructive" });
       return;
     }
     
     setIsEnhancing(true);
     try {
-      const api_prompt = `You are a creative assistant for a text-to-video AI. Enhance this simple user prompt into a detailed, vivid, and cinematic description. Add details about the atmosphere, lighting, style, and composition. Keep the final prompt concise (around 25-30 words). Do not use quotes. Simple prompt: "${prompt}"`;
-      
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GOOGLE_AI_API_KEY}`, {
+      // Llama-3 uses a specific chat template
+      const messages = [
+        { role: "system", content: "You are a creative assistant for a text-to-video AI. Enhance the user's simple prompt into a detailed, vivid, and cinematic description. Focus on atmosphere, lighting, and composition. The output must be a single, concise sentence of about 25-30 words. Do not add any extra text, just the prompt." },
+        { role: "user", content: prompt }
+      ];
+
+      const response = await fetch(HUGGING_FACE_API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: api_prompt }] }] }),
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(HUGGING_FACE_TOKEN && { Authorization: HUGGING_FACE_TOKEN })
+        },
+        body: JSON.stringify({ 
+          inputs: messages,
+          parameters: { max_new_tokens: 60, return_full_text: false }
+        }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error("API Error:", errorData);
-        throw new Error(errorData.error.message || "Failed to fetch from AI API");
+        if (errorData.error && errorData.error.includes("is currently loading")) {
+            toast({ title: "AI Model is Waking Up", description: "This is a large model and can take a moment to load. Please try again in 20-30 seconds.", variant: "default" });
+        } else {
+            throw new Error(errorData.error || "Failed to fetch from Hugging Face API");
+        }
+      } else {
+        const data = await response.json();
+        const enhancedPrompt = data[0].generated_text.trim().replace(/"/g, '');
+        setPrompt(enhancedPrompt);
+        toast({ title: "Prompt Enhanced!", description: "Your idea has been supercharged by Llama-3." });
       }
-
-      const data = await response.json();
-      const enhancedPrompt = data.candidates[0].content.parts[0].text.trim();
-      setPrompt(enhancedPrompt);
-      toast({ title: "Prompt Enhanced!", description: "Your idea has been supercharged by AI." });
 
     } catch (error) {
       console.error("Prompt enhancement failed:", error);
-      toast({ title: "Enhancement Failed", description: "Could not connect to the AI service. Please check the API key.", variant: "destructive" });
+      toast({ title: "Enhancement Failed", description: "Could not connect to the AI service.", variant: "destructive" });
     }
     setIsEnhancing(false);
   };
 
-  // Function to get dynamic example prompts
+  // Function to get dynamic example prompts from Llama-3
   const getDynamicExamples = async () => {
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GOOGLE_AI_API_KEY}`, {
+      const messages = [
+        { role: "system", content: "You are a creative assistant. Generate 6 short, visually interesting video prompt ideas. Each idea should be on a new line. Do not use numbering or bullet points. Output only the prompts." },
+        { role: "user", content: "Generate ideas." }
+      ];
+      const response = await fetch(HUGGING_FACE_API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: "Generate 6 short, creative, and visually interesting video prompt ideas. Separate each idea with a newline. Do not use numbering or bullet points." }] }] }),
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(HUGGING_FACE_TOKEN && { Authorization: HUGGING_FACE_TOKEN })
+        },
+        body: JSON.stringify({ 
+          inputs: messages,
+          parameters: { max_new_tokens: 150, return_full_text: false }
+        }),
       });
       if (!response.ok) throw new Error("Failed to fetch examples");
       const data = await response.json();
-      const prompts = data.candidates[0].content.parts[0].text.split('\n').filter(p => p.trim() !== '');
-      setExamplePrompts(prompts);
+      const prompts = data[0].generated_text.split('\n').filter(p => p.trim() !== '');
+      setExamplePrompts(prompts.length > 3 ? prompts : getFallbackPrompts());
     } catch (error) {
       console.error("Failed to get dynamic examples:", error);
-      // Fallback to static prompts if API fails
-      setExamplePrompts([
-        "A majestic eagle soaring over mountains",
-        "Ocean waves crashing on a sunny beach",
-        "A futuristic city with flying cars at night",
-        "A quiet forest with sunbeams filtering through trees",
-        "A time-lapse of a flower blooming",
-        "A cat playfully chasing a laser pointer",
-      ]);
+      setExamplePrompts(getFallbackPrompts());
     }
   };
 
@@ -120,6 +142,7 @@ export const VideoGenerator = () => {
     getDynamicExamples();
   }, []);
 
+  // ... (The rest of the component remains the same)
   const saveToHistory = (video: GeneratedVideo) => {
     const newHistory = [video, ...videoHistory].slice(0, 10);
     setVideoHistory(newHistory);
@@ -219,7 +242,7 @@ export const VideoGenerator = () => {
   const loadFromHistory = (video: GeneratedVideo) => {
     setVideoUrl(video.url);
     setPrompt(video.prompt);
-    setNegativePrompt(video.negativePrompt || "blurry, low quality, text, watermark, grainy");
+    setNegativePrompt(video.negativePrompt || "blurry, low quality, text, watermark, grainy, deformed");
     setCameraControl(video.cameraControl as keyof typeof CAMERA_CONTROLS || "NONE");
     setSelectedQuality(video.quality);
     setCurrentVideo(video);
@@ -245,7 +268,7 @@ export const VideoGenerator = () => {
             />
             <Button onClick={enhancePromptWithAI} disabled={isEnhancing || !prompt.trim()} variant="outline" size="sm" className="gap-2">
               {isEnhancing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-              Enhance with AI
+              Enhance with AI (Llama-3)
             </Button>
           </div>
 
@@ -256,7 +279,7 @@ export const VideoGenerator = () => {
             </label>
             <Textarea
               id="negative-prompt"
-              placeholder="e.g., blurry, text, watermark, grainy"
+              placeholder="e.g., blurry, text, watermark, grainy, deformed"
               value={negativePrompt}
               onChange={(e) => setNegativePrompt(e.target.value)}
               className="min-h-[60px] text-sm resize-none bg-background/70"
