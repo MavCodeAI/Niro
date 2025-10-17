@@ -69,44 +69,119 @@ export const VideoGenerator = () => {
       const encodedPrompt = encodeURIComponent(prompt.trim());
       const apiUrl = `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodedPrompt}`;
       
+      console.log("Fetching video from:", apiUrl);
+      
       const response = await fetch(apiUrl, {
         method: "GET",
-        headers: {
-          "Accept": "video/mp4,video/*",
-        }
       });
       
+      console.log("Response status:", response.status);
+      console.log("Response content-type:", response.headers.get("content-type"));
+      
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+        // Try to get error message from response
+        let errorMessage = `API Error: ${response.status}`;
+        try {
+          const errorText = await response.text();
+          console.log("Error response:", errorText);
+          
+          // Try to parse as JSON
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorMessage = errorJson.error || errorJson.message || errorMessage;
+          } catch {
+            errorMessage = errorText || errorMessage;
+          }
+        } catch {
+          // Ignore if we can't read the error
+        }
+        throw new Error(errorMessage);
       }
 
-      // Check if response is actually a video
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("video")) {
-        throw new Error("Invalid response format");
+      const contentType = response.headers.get("content-type") || "";
+      console.log("Content type:", contentType);
+
+      // Check if response is JSON (error or URL response)
+      if (contentType.includes("application/json") || contentType.includes("text")) {
+        const jsonData = await response.json();
+        console.log("JSON response:", jsonData);
+        
+        // Check if there's an error in JSON
+        if (jsonData.error) {
+          throw new Error(jsonData.error);
+        }
+        
+        // Check if there's a video URL in response
+        if (jsonData.url || jsonData.video_url || jsonData.videoUrl) {
+          const videoUrlFromApi = jsonData.url || jsonData.video_url || jsonData.videoUrl;
+          setVideoUrl(videoUrlFromApi);
+          setProgress(100);
+          
+          saveToHistory({
+            url: videoUrlFromApi,
+            prompt: prompt.trim(),
+            timestamp: Date.now(),
+          });
+          
+          toast({
+            title: "کامیاب!",
+            description: "آپ کی ویڈیو تیار ہو گئی ہے",
+          });
+          return;
+        }
+        
+        throw new Error("Invalid API response format");
       }
 
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      setVideoUrl(url);
-      setProgress(100);
+      // Handle video blob response
+      if (contentType.includes("video") || contentType.includes("octet-stream")) {
+        const blob = await response.blob();
+        console.log("Blob received:", blob.size, "bytes");
+        
+        if (blob.size === 0) {
+          throw new Error("Received empty video file");
+        }
+        
+        const url = URL.createObjectURL(blob);
+        setVideoUrl(url);
+        setProgress(100);
 
-      // Save to history
-      saveToHistory({
-        url,
-        prompt: prompt.trim(),
-        timestamp: Date.now(),
-      });
+        saveToHistory({
+          url,
+          prompt: prompt.trim(),
+          timestamp: Date.now(),
+        });
 
-      toast({
-        title: "کامیاب!",
-        description: "آپ کی ویڈیو تیار ہو گئی ہے",
-      });
+        toast({
+          title: "کامیاب!",
+          description: "آپ کی ویڈیو تیار ہو گئی ہے",
+        });
+        return;
+      }
+
+      // If we get here, unknown response type
+      throw new Error(`Unexpected response type: ${contentType}`);
+      
     } catch (error) {
       console.error("Error generating video:", error);
+      
+      let errorMessage = "ویڈیو بنانے میں مسئلہ پیش آیا۔ دوبارہ کوشش کریں";
+      
+      if (error instanceof Error) {
+        if (error.message.includes("Failed to fetch")) {
+          errorMessage = "نیٹ ورک کی خرابی۔ اپنا انٹرنیٹ چیک کریں";
+        } else if (error.message.includes("API Error: 429")) {
+          errorMessage = "بہت زیادہ کوششیں۔ کچھ دیر بعد کوشش کریں";
+        } else if (error.message.includes("API Error: 500")) {
+          errorMessage = "سرور کی خرابی۔ دوبارہ کوشش کریں";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
         title: "خطا",
-        description: error instanceof Error ? error.message : "ویڈیو بنانے میں مسئلہ پیش آیا۔ دوبارہ کوشش کریں",
+        description: errorMessage,
         variant: "destructive",
       });
       setProgress(0);
