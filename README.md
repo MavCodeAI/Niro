@@ -1,138 +1,73 @@
-# Niro - AI Video Generator
+# Welcome to your Lovable project
 
-🎬 **Transform your ideas into stunning videos with AI-powered generation**
+## Project info
 
-Niro is a professional-grade AI video generation platform that converts text prompts into high-quality videos using cutting-edge artificial intelligence technology.
+**URL**: https://lovable.dev/projects/66964195-dfca-4944-8d64-b36520c27030
 
-## ✨ Features
+## How can I edit this code?
 
-### Core Features
-- **AI Video Generation**: Convert text prompts to videos in seconds
-- **Multiple Duration Options**: 4s, 8s, 15s, 30s, and custom durations
-- **Quality Selection**: 720p, 1080p, and 4K output options
-- **Aspect Ratio Support**: 16:9, 9:16, 1:1, and 4:3 formats
-- **Style Variations**: Realistic, cinematic, cartoon, and abstract styles
-- **Real-time Preview**: See your video before final generation
+There are several ways of editing your application.
 
-### Advanced Features
-- **Queue Management**: Handle multiple video generations simultaneously
-- **Progress Tracking**: Real-time progress updates for long videos
-- **Smart Caching**: Multi-layer caching for faster performance
-- **Priority Processing**: High-priority queue for premium users
-- **Batch Generation**: Generate multiple videos at once
-- **History Management**: Keep track of all your creations
+**Use Lovable**
 
-### Performance Optimizations
-- **Browser Caching**: Static assets cached for faster loading
-- **CDN Integration**: Global content delivery for optimal performance
-- **API Response Caching**: Reduced API calls with intelligent caching
-- **Database Optimization**: Efficient query optimization
+Simply visit the [Lovable Project](https://lovable.dev/projects/66964195-dfca-4944-8d64-b36520c27030) and start prompting.
 
-## 🚀 Getting Started
+Changes made via Lovable will be committed automatically to this repo.
 
-### Prerequisites
-- Node.js 18+ or Bun
-- Modern web browser with JavaScript enabled
+**Use your preferred IDE**
 
-### Installation
+If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/niro.git
-cd niro
-```
+The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
-2. Install dependencies:
-```bash
-npm install
-# or
-bun install
-```
+Follow these steps:
 
-3. Start the development server:
-```bash
+```sh
+# Step 1: Clone the repository using the project's Git URL.
+git clone <YOUR_GIT_URL>
+
+# Step 2: Navigate to the project directory.
+cd <YOUR_PROJECT_NAME>
+
+# Step 3: Install the necessary dependencies.
+npm i
+
+# Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
-# or
-bun run dev
 ```
 
-4. Open your browser and navigate to `http://localhost:5173`
+**Edit a file directly in GitHub**
 
-## 🏗️ Tech Stack
+- Navigate to the desired file(s).
+- Click the "Edit" button (pencil icon) at the top right of the file view.
+- Make your changes and commit the changes.
 
-- **Frontend**: React 18 + TypeScript
-- **Build Tool**: Vite
-- **Styling**: Tailwind CSS + shadcn/ui
-- **State Management**: React Hooks + Context
-- **Routing**: React Router
-- **UI Components**: Radix UI + Custom Components
-- **Performance**: Web Workers + Service Workers
+**Use GitHub Codespaces**
 
-## 📖 Usage
+- Navigate to the main page of your repository.
+- Click on the "Code" button (green button) near the top right.
+- Select the "Codespaces" tab.
+- Click on "New codespace" to launch a new Codespace environment.
+- Edit files directly within the Codespace and commit and push your changes once you're done.
 
-1. **Enter Your Prompt**: Describe the video you want to create
-2. **Configure Settings**: Select duration, quality, aspect ratio, and style
-3. **Generate Video**: Click generate and watch the magic happen
-4. **Download & Share**: Save your video or share it directly
+## What technologies are used for this project?
 
-## 🎯 Subscription Tiers
+This project is built with:
 
-### Free Tier
-- 4-second videos
-- 720p quality
-- Basic styles
-- Standard queue priority
+- Vite
+- TypeScript
+- React
+- shadcn-ui
+- Tailwind CSS
 
-### Premium Tier
-- Up to 15-second videos
-- 1080p quality
-- All styles
-- High queue priority
-- Advanced settings
+## How can I deploy this project?
 
-### Professional Tier
-- Up to 30-second videos
-- 4K quality
-- Custom styles
-- Highest priority
-- Batch generation
-- API access
+Simply open [Lovable](https://lovable.dev/projects/66964195-dfca-4944-8d64-b36520c27030) and click on Share -> Publish.
 
-### Enterprise Tier
-- Unlimited duration
-- All features
-- Dedicated support
-- Custom integrations
-- White-label options
+## Can I connect a custom domain to my Lovable project?
 
-## 🔧 Configuration
+Yes, you can!
 
-The application can be configured through environment variables:
+To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
-```env
-VITE_API_BASE_URL=https://your-api-endpoint.com
-VITE_CDN_URL=https://your-cdn-url.com
-VITE_ENABLE_ANALYTICS=true
-```
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- AI video generation powered by multiple providers
-- UI components by shadcn/ui
-- Icons by Lucide React
-
-## 📞 Support
-
-For support, email support@niro.ai or join our Discord community.
-
----
-
-**Niro** - Bringing your imagination to life with AI ✨
+Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
