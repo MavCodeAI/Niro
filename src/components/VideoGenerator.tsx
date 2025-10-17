@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, Timer } from "lucide-react";
+import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, Info } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 
@@ -11,17 +11,58 @@ interface GeneratedVideo {
   url: string;
   prompt: string;
   timestamp: number;
-  duration: string;
+  duration: number;
+  model: string;
 }
+
+// HuggingFace Free Models Collection
+const HUGGINGFACE_MODELS = {
+  ALIBABA_1_7B: {
+    name: 'Ali-Vilab 1.7B (Best Quality)',
+    endpoint: 'https://api-inference.huggingface.co/models/ali-vilab/text-to-video-ms-1.7b',
+    maxDuration: 16,
+    description: 'Highest quality, best for detailed scenes',
+    icon: '🌟'
+  },
+  DAMO_1_7B: {
+    name: 'Damo-Vilab 1.7B (Fast)',
+    endpoint: 'https://api-inference.huggingface.co/models/damo-vilab/text-to-video-ms-1.7b',
+    maxDuration: 16,
+    description: 'Fast generation, good quality',
+    icon: '⚡'
+  },
+  VIDEOCRAFTER: {
+    name: 'VideoCrafter2 (Creative)',
+    endpoint: 'https://api-inference.huggingface.co/models/VideoCrafter/VideoCrafter2',
+    maxDuration: 12,
+    description: 'Creative and artistic videos',
+    icon: '🎨'
+  },
+  ANIMATEDIFF: {
+    name: 'AnimateDiff (Smooth)',
+    endpoint: 'https://api-inference.huggingface.co/models/ByteDance/AnimateDiff-Lightning',
+    maxDuration: 8,
+    description: 'Very smooth animations',
+    icon: '🎬'
+  },
+  WAN2_LIGHTNING: {
+    name: 'Wan2 Lightning (Ultra Fast)',
+    endpoint: 'https://api-inference.huggingface.co/models/lightx2v/Wan2.2-Lightning',
+    maxDuration: 12,
+    description: 'Ultra fast generation',
+    icon: '⚡'
+  }
+} as const;
 
 export const VideoGenerator = () => {
   const [prompt, setPrompt] = useState("");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState("");
-  const [duration, setDuration] = useState("4");
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<GeneratedVideo[]>([]);
+  const [duration, setDuration] = useState<number>(8);
+  const [selectedModel, setSelectedModel] = useState<keyof typeof HUGGINGFACE_MODELS>('ALIBABA_1_7B');
 
   // Load history from localStorage
   useEffect(() => {
@@ -33,18 +74,82 @@ export const VideoGenerator = () => {
 
   // Save history to localStorage
   const saveToHistory = (video: GeneratedVideo) => {
-    const newHistory = [video, ...videoHistory].slice(0, 5); // Keep last 5 videos
+    const newHistory = [video, ...videoHistory].slice(0, 10);
     setVideoHistory(newHistory);
     localStorage.setItem("videoHistory", JSON.stringify(newHistory));
   };
 
+  const generateVideoWithModel = async (modelKey: keyof typeof HUGGINGFACE_MODELS): Promise<string> => {
+    const model = HUGGINGFACE_MODELS[modelKey];
+    
+    const response = await fetch(model.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputs: prompt,
+        parameters: {
+          num_frames: Math.min(duration * 8, 128), // 8 fps
+          num_inference_steps: 25, // Good balance of speed and quality
+          guidance_scale: 12, // Good prompt following
+          width: 1024,
+          height: 576,
+        }
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`${model.name} API Error: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  };
+
+  const generateVideo = async (): Promise<{url: string, modelUsed: string}> => {
+    // Try models in order of preference with smart fallback
+    const modelOrder: (keyof typeof HUGGINGFACE_MODELS)[] = [
+      selectedModel, // User's choice first
+      'ALIBABA_1_7B', // Best quality fallback
+      'WAN2_LIGHTNING', // Fast fallback
+      'DAMO_1_7B', // Reliable fallback
+      'VIDEOCRAFTER', // Creative fallback
+      'ANIMATEDIFF' // Final fallback
+    ];
+
+    // Remove duplicates
+    const uniqueModels = modelOrder.filter((model, index, arr) => arr.indexOf(model) === index);
+
+    let lastError: Error | null = null;
+
+    for (const modelKey of uniqueModels) {
+      try {
+        const model = HUGGINGFACE_MODELS[modelKey];
+        console.log(`🔄 Trying ${model.name}...`);
+        
+        const videoUrl = await generateVideoWithModel(modelKey);
+        return { url: videoUrl, modelUsed: model.name };
+        
+      } catch (error) {
+        lastError = error as Error;
+        console.error(`❌ ${HUGGINGFACE_MODELS[modelKey].name} failed:`, error);
+        continue;
+      }
+    }
+
+    throw lastError || new Error('All models failed');
+  };
+
   const examplePrompts = [
     "A majestic eagle soaring over snow-capped mountains at sunset",
-    "Cyberpunk city with neon lights and flying cars in the rain",
     "Ocean waves crashing against coastal cliffs during a storm",
-    "Astronaut floating in space with Earth in the background",
     "Cherry blossoms falling in a peaceful Japanese garden",
-    "Lightning illuminating a dark forest during thunderstorm"
+    "Lightning illuminating a dark forest during thunderstorm",
+    "Astronaut floating in space with Earth in the background",
+    "Cyberpunk city with neon lights and flying cars in the rain",
+    "Time-lapse of a flower blooming in spring garden",
+    "Fireflies dancing in a magical forest at night"
   ];
 
   const handleGenerate = async () => {
@@ -70,49 +175,34 @@ export const VideoGenerator = () => {
     }, 500);
 
     try {
-      const encodedPrompt = encodeURIComponent(prompt.trim());
-      const apiUrl = `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodedPrompt}&duration=${duration}`;
+      const result = await generateVideo();
       
-      const response = await fetch(apiUrl);
-      
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
-
-      const jsonData = await response.json();
-      
-      if (!jsonData.success || !jsonData.url) {
-        throw new Error(jsonData.error || "Invalid API response");
-      }
-
-      const videoUrl = jsonData.url;
-      setVideoUrl(videoUrl);
+      setVideoUrl(result.url);
       setProgress(100);
       
       saveToHistory({
-        url: videoUrl,
+        url: result.url,
         prompt: prompt.trim(),
         timestamp: Date.now(),
-        duration: duration,
+        duration,
+        model: result.modelUsed
       });
       
       toast({
-        title: "Success!",
-        description: "Your video is ready",
+        title: "Success! 🎉",
+        description: `Video generated with ${result.modelUsed}`,
       });
       
     } catch (error) {
-      console.error("Error generating video:", error);
+      console.error("All models failed:", error);
       
-      let errorMessage = "There was a problem generating the video. Please try again.";
+      let errorMessage = "All video generation models are currently busy. Please try again in a few minutes.";
       
       if (error instanceof Error) {
-        if (error.message.includes("Failed to fetch")) {
-          errorMessage = "Network error. Please check your internet connection.";
-        } else if (error.message.includes("429")) {
-          errorMessage = "Too many requests. Please try again later.";
-        } else if (error.message.includes("500")) {
-          errorMessage = "Server error. Please try again.";
+        if (error.message.includes("429")) {
+          errorMessage = "Rate limit reached. Please wait a moment and try again.";
+        } else if (error.message.includes("503")) {
+          errorMessage = "Models are loading. Please try again in 1-2 minutes.";
         }
       }
       
@@ -122,10 +212,10 @@ export const VideoGenerator = () => {
         variant: "destructive",
       });
       setProgress(0);
-    } finally {
-      clearInterval(progressInterval);
-      setIsGenerating(false);
     }
+
+    clearInterval(progressInterval);
+    setIsGenerating(false);
   };
 
   const handleDownload = async () => {
@@ -150,7 +240,7 @@ export const VideoGenerator = () => {
       URL.revokeObjectURL(url);
       
       toast({
-        title: "Download successful!",
+        title: "Download successful! 🎉",
         description: "The video has been saved to your device",
       });
     } catch (error) {
@@ -174,14 +264,13 @@ export const VideoGenerator = () => {
           url: window.location.href,
         });
         toast({
-          title: "Shared!",
+          title: "Shared! 🎉",
           description: "The video was shared successfully",
         });
       } else {
-        // Fallback: copy link
         await navigator.clipboard.writeText(window.location.href);
         toast({
-          title: "Copied!",
+          title: "Copied! 📋",
           description: "Link copied to clipboard",
         });
       }
@@ -218,28 +307,62 @@ export const VideoGenerator = () => {
             />
           </div>
 
-          <div className="space-y-3">
-            <label htmlFor="duration" className="text-base font-semibold flex items-center gap-2">
-              <Timer className="h-4 w-4 text-secondary" />
-              Video Duration
-            </label>
-            <Select value={duration} onValueChange={setDuration} disabled={isGenerating}>
-              <SelectTrigger className="w-full bg-background/50 backdrop-blur">
-                <SelectValue placeholder="Select duration" />
+          {/* Model Selection */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">AI Model (HuggingFace Free)</label>
+            <Select value={selectedModel} onValueChange={(value: keyof typeof HUGGINGFACE_MODELS) => setSelectedModel(value)}>
+              <SelectTrigger>
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="4">4 seconds - Quick preview</SelectItem>
-                <SelectItem value="8">8 seconds - Short clip</SelectItem>
-                <SelectItem value="15">15 seconds - Standard video</SelectItem>
-                <SelectItem value="30">30 seconds - Extended clip</SelectItem>
+                {Object.entries(HUGGINGFACE_MODELS).map(([key, model]) => (
+                  <SelectItem key={key} value={key}>
+                    <div className="flex items-center gap-2">
+                      <span>{model.icon}</span>
+                      <span>{model.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              {HUGGINGFACE_MODELS[selectedModel].description}
+            </p>
+          </div>
+
+          {/* Duration Selection */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">Video Duration</label>
+            <Select value={duration.toString()} onValueChange={(value) => setDuration(parseInt(value))}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="4">4 seconds</SelectItem>
+                <SelectItem value="8">8 seconds (Recommended)</SelectItem>
+                <SelectItem value="12">12 seconds</SelectItem>
+                {HUGGINGFACE_MODELS[selectedModel].maxDuration > 12 && (
+                  <SelectItem value="16">16 seconds</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Max duration for this model: {HUGGINGFACE_MODELS[selectedModel].maxDuration}s
+            </p>
+          </div>
+
+          {/* Info Banner */}
+          <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <div className="text-sm text-blue-700 dark:text-blue-300">
+              <strong>Smart Fallback:</strong> If your selected model is busy, we'll automatically try other models to ensure your video gets generated.
+            </div>
           </div>
 
           {isGenerating && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Generating...</span>
+                <span className="text-muted-foreground">Generating with {HUGGINGFACE_MODELS[selectedModel].name}...</span>
                 <span className="font-semibold">{Math.round(progress)}%</span>
               </div>
               <Progress value={progress} className="h-2" />
@@ -250,8 +373,7 @@ export const VideoGenerator = () => {
             onClick={handleGenerate}
             disabled={isGenerating}
             size="lg"
-            variant="hero"
-            className="w-full text-base font-semibold"
+            className="w-full text-base font-semibold bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary text-primary-foreground"
           >
             {isGenerating ? (
               <>
@@ -261,7 +383,7 @@ export const VideoGenerator = () => {
             ) : (
               <>
                 <Video className="h-5 w-5" />
-                Generate Video
+                🤗 Generate Free Video
               </>
             )}
           </Button>
@@ -347,7 +469,6 @@ export const VideoGenerator = () => {
                 setVideoUrl(null);
                 setPrompt("");
                 setCurrentPrompt("");
-                setDuration("4");
               }}
               variant="outline"
               className="gap-2"
@@ -387,7 +508,7 @@ export const VideoGenerator = () => {
                   setVideoUrl(video.url);
                   setCurrentPrompt(video.prompt);
                   setPrompt(video.prompt);
-                  setDuration(video.duration || "4");
+                  if (video.duration) setDuration(video.duration);
                 }}
               >
                 <video
@@ -396,9 +517,12 @@ export const VideoGenerator = () => {
                   muted
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent flex items-end p-3">
-                  <div className="space-y-1">
-                    <p className="text-xs text-foreground/90 line-clamp-2">{video.prompt}</p>
-                    <p className="text-xs text-muted-foreground">{video.duration || '4'}s duration</p>
+                  <div className="w-full">
+                    <p className="text-xs text-foreground/90 line-clamp-2 mb-1">{video.prompt}</p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {video.duration && <span>{video.duration}s</span>}
+                      {video.model && <span>• {video.model}</span>}
+                    </div>
                   </div>
                 </div>
                 <div className="absolute top-2 right-2 bg-background/80 backdrop-blur px-2 py-1 rounded text-xs">
