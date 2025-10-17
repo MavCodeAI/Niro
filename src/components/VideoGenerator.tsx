@@ -32,8 +32,8 @@ const CAMERA_CONTROLS = {
   TILT_DOWN: "Tilt Down",
 };
 
-// Your Google AI API Key has been added here
-const GOOGLE_AI_API_KEY = "AIzaSyDLq9jrojQzG2kQ8uRezbUeXzb7RI-wwIY";
+// The new Google AI API Key has been updated here
+const GOOGLE_AI_API_KEY = "AIzaSyClIUDwcotN1WuFLdL9ac6GJhuiZ234Foo";
 
 export const VideoGenerator = () => {
   const [prompt, setPrompt] = useState("");
@@ -70,7 +70,11 @@ export const VideoGenerator = () => {
         body: JSON.stringify({ contents: [{ parts: [{ text: api_prompt }] }] }),
       });
 
-      if (!response.ok) throw new Error("Failed to fetch from AI API");
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("API Error:", errorData);
+        throw new Error(errorData.error.message || "Failed to fetch from AI API");
+      }
 
       const data = await response.json();
       const enhancedPrompt = data.candidates[0].content.parts[0].text.trim();
@@ -92,11 +96,13 @@ export const VideoGenerator = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: "Generate 6 short, creative, and visually interesting video prompt ideas. Separate each idea with a newline. Do not use numbering or bullet points." }] }] }),
       });
+      if (!response.ok) throw new Error("Failed to fetch examples");
       const data = await response.json();
       const prompts = data.candidates[0].content.parts[0].text.split('\n').filter(p => p.trim() !== '');
       setExamplePrompts(prompts);
     } catch (error) {
       console.error("Failed to get dynamic examples:", error);
+      // Fallback to static prompts if API fails
       setExamplePrompts([
         "A majestic eagle soaring over mountains",
         "Ocean waves crashing on a sunny beach",
@@ -123,8 +129,6 @@ export const VideoGenerator = () => {
   const buildFinalPrompt = () => {
     let finalPrompt = prompt;
     if (cameraControl !== 'NONE') finalPrompt += `, ${CAMERA_CONTROLS[cameraControl]}`;
-    // Note: The negative prompt is appended in a way that might not be supported by all APIs.
-    // For Pollinations, it acts more like a hint.
     if (negativePrompt.trim()) finalPrompt += ` | avoid: ${negativePrompt}`;
     return finalPrompt;
   };
@@ -135,14 +139,14 @@ export const VideoGenerator = () => {
       : `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodeURIComponent(fullPrompt)}`;
 
     const response = await fetch(apiEndpoint);
-    if (!response.ok) throw new Error('API request failed');
+    if (!response.ok) throw new Error('Video generation API request failed');
 
     if (selectedQuality === 'HIGH') {
         const blob = await response.blob();
         return URL.createObjectURL(blob);
     } else {
         const data = await response.json();
-        if (!data.success || !data.url) throw new Error(data.error || 'Invalid API response');
+        if (!data.success || !data.url) throw new Error(data.error || 'Invalid video API response');
         return data.url;
     }
   };
@@ -172,7 +176,7 @@ export const VideoGenerator = () => {
       toast({ title: "Success! 🎉", description: "Your video has been generated." });
     } catch (error) {
       console.error("Generation failed:", error);
-      toast({ title: "Generation Failed", description: "The service is busy. Please try again.", variant: "destructive" });
+      toast({ title: "Generation Failed", description: "The video service is busy. Please try again.", variant: "destructive" });
       setProgress(0);
     }
 
@@ -356,4 +360,3 @@ export const VideoGenerator = () => {
     </div>
   );
 };
- 
