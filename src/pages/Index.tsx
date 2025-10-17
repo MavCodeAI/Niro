@@ -1,12 +1,20 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { Hero } from "@/components/Hero";
+import { VideoGenerator } from "@/components/VideoGenerator";
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-[var(--gradient-hero)]">
+      <Hero />
+      <main className="container mx-auto px-4 py-12 pb-24">
+        <VideoGenerator />
+      </main>
+      
+      {/* Footer */}
+      <footer className="border-t border-border/50 backdrop-blur-xl">
+        <div className="container mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
+          <p>Powered by AI • Made with ❤️</p>
+        </div>
+      </footer>
     </div>
   );
 };
