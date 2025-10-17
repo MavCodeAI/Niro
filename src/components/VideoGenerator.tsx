@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, Camera, Ban, Info, Music } from "lucide-react";
+import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, Camera, Info } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 
@@ -11,7 +11,6 @@ import { Progress } from "@/components/ui/progress";
 interface GeneratedVideo {
   url: string;
   prompt: string;
-  negativePrompt?: string;
   cameraControl?: string;
   timestamp: number;
   quality: keyof typeof VIDEO_QUALITY_LEVELS;
@@ -44,7 +43,8 @@ const FALLBACK_PROMPTS = [
 
 export const VideoGenerator = () => {
   const [prompt, setPrompt] = useState("");
-  const [negativePrompt, setNegativePrompt] = useState("blurry, low quality, text, watermark, grainy, deformed");
+  // Negative prompt is now a fixed value, hidden from the user.
+  const [negativePrompt] = useState("blurry, low quality, text, watermark, grainy, deformed, ugly");
   const [cameraControl, setCameraControl] = useState<keyof typeof CAMERA_CONTROLS>("NONE");
   
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -73,6 +73,7 @@ export const VideoGenerator = () => {
     if (cameraControl !== 'NONE') {
       finalPrompt += `, ${CAMERA_CONTROLS[cameraControl]}`;
     }
+    // The fixed negative prompt is always added in the background.
     if (negativePrompt.trim()) {
       finalPrompt += ` | avoid: ${negativePrompt}`;
     }
@@ -108,7 +109,7 @@ export const VideoGenerator = () => {
     setProgress(0);
     
     const finalPrompt = buildFinalPrompt();
-    const newVideoData: Omit<GeneratedVideo, 'url' | 'timestamp'> = { prompt, negativePrompt, cameraControl, quality: selectedQuality };
+    const newVideoData: Omit<GeneratedVideo, 'url' | 'timestamp'> = { prompt, cameraControl, quality: selectedQuality };
     
     const progressInterval = setInterval(() => setProgress(p => (p >= 95 ? p : p + Math.random() * 10)), 800);
 
@@ -119,7 +120,7 @@ export const VideoGenerator = () => {
       setCurrentVideo(generatedVideo);
       setProgress(100);
       saveToHistory(generatedVideo);
-      toast({ title: "Success! 🎉", description: "Your silent video has been generated." });
+      toast({ title: "Success! 🎉", description: "Your video has been generated." });
     } catch (error) {
       console.error("Generation failed:", error);
       toast({ title: "Generation Failed", description: "The video service is busy. Please try again.", variant: "destructive" });
@@ -154,7 +155,6 @@ export const VideoGenerator = () => {
   const loadFromHistory = (video: GeneratedVideo) => {
     setVideoUrl(video.url);
     setPrompt(video.prompt);
-    setNegativePrompt(video.negativePrompt || "blurry, low quality, text, watermark, grainy, deformed");
     setCameraControl(video.cameraControl as keyof typeof CAMERA_CONTROLS || "NONE");
     setSelectedQuality(video.quality);
     setCurrentVideo(video);
@@ -165,13 +165,6 @@ export const VideoGenerator = () => {
     <div className="w-full max-w-4xl mx-auto space-y-8 p-4">
       <Card className="p-6 md:p-8 bg-card/50 backdrop-blur-lg border-border/20 shadow-lg">
         <div className="space-y-6">
-          <div className="flex items-center gap-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-            <Music className="h-5 w-5 text-yellow-500 flex-shrink-0" />
-            <p className="text-xs text-yellow-500/90">
-              <strong>Note:</strong> The generated videos are silent. Sound can be added as a future feature.
-            </p>
-          </div>
-
           <div className="space-y-3">
             <label htmlFor="prompt" className="text-lg font-semibold flex items-center gap-2 text-foreground">
               <Sparkles className="h-5 w-5 text-primary" />
@@ -183,21 +176,6 @@ export const VideoGenerator = () => {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-[120px] text-base resize-none bg-background/70"
-              disabled={isGenerating}
-            />
-          </div>
-
-          <div className="space-y-3">
-            <label htmlFor="negative-prompt" className="text-base font-medium flex items-center gap-2 text-foreground">
-              <Ban className="h-5 w-5 text-destructive" />
-              Negative Prompt (What to avoid)
-            </label>
-            <Textarea
-              id="negative-prompt"
-              placeholder="e.g., blurry, text, watermark, grainy, deformed"
-              value={negativePrompt}
-              onChange={(e) => setNegativePrompt(e.target.value)}
-              className="min-h-[60px] text-sm resize-none bg-background/70"
               disabled={isGenerating}
             />
           </div>
