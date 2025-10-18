@@ -23,14 +23,11 @@ export const VideoGenerator = () => {
   // Load history from localStorage
   useEffect(() => {
     const savedHistory = localStorage.getItem("videoHistory");
-    if (savedHistory) {
-      setVideoHistory(JSON.parse(savedHistory));
-    }
+    if (savedHistory) setVideoHistory(JSON.parse(savedHistory));
   }, []);
 
-  // Save history to localStorage
   const saveToHistory = (video: GeneratedVideo) => {
-    const newHistory = [video, ...videoHistory].slice(0, 5); // Keep last 5 videos
+    const newHistory = [video, ...videoHistory].slice(0, 5);
     setVideoHistory(newHistory);
     localStorage.setItem("videoHistory", JSON.stringify(newHistory));
   };
@@ -44,11 +41,7 @@ export const VideoGenerator = () => {
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a description for the video",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Please enter a description for the video", variant: "destructive" });
       return;
     }
 
@@ -58,63 +51,32 @@ export const VideoGenerator = () => {
     setCurrentPrompt(prompt);
 
     const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 90) return prev;
-        return prev + Math.random() * 15;
-      });
+      setProgress(prev => Math.min(prev + Math.random() * 15, 90));
     }, 500);
 
     try {
       const encodedPrompt = encodeURIComponent(prompt.trim());
       const apiUrl = `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodedPrompt}`;
-      
       const response = await fetch(apiUrl);
-      
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
       const jsonData = await response.json();
-      
-      if (!jsonData.success || !jsonData.url) {
-        throw new Error(jsonData.error || "Invalid API response");
-      }
+      if (!jsonData.success || !jsonData.url) throw new Error(jsonData.error || "Invalid API response");
 
-      const videoUrl = jsonData.url;
-      setVideoUrl(videoUrl);
+      setVideoUrl(jsonData.url);
       setProgress(100);
-      
-      saveToHistory({
-        url: videoUrl,
-        prompt: prompt.trim(),
-        timestamp: Date.now(),
-      });
-      
-      toast({
-        title: "Success!",
-        description: "Your video has been generated successfully",
-      });
-      
+
+      saveToHistory({ url: jsonData.url, prompt: prompt.trim(), timestamp: Date.now() });
+      toast({ title: "Success!", description: "Your video has been generated successfully" });
+
     } catch (error) {
       console.error("Error generating video:", error);
-      
-      let errorMessage = "Failed to generate video. Please try again.";
-
+      let message = "Failed to generate video. Please try again.";
       if (error instanceof Error) {
-        if (error.message.includes("Failed to fetch")) {
-          errorMessage = "Network error. Please check your internet connection.";
-        } else if (error.message.includes("429")) {
-          errorMessage = "Too many requests. Please try again later.";
-        } else if (error.message.includes("500")) {
-          errorMessage = "Server error. Please try again.";
-        }
+        if (error.message.includes("Failed to fetch")) message = "Network error. Check your connection.";
+        else if (error.message.includes("429")) message = "Too many requests. Try again later.";
+        else if (error.message.includes("500")) message = "Server error. Please try again.";
       }
-      
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: message, variant: "destructive" });
       setProgress(0);
     } finally {
       clearInterval(progressInterval);
@@ -126,48 +88,32 @@ export const VideoGenerator = () => {
     if (!videoUrl) return;
 
     try {
-      toast({
-        title: "Download starting...",
-        description: "Please wait",
-      });
-
+      toast({ title: "Download starting...", description: "Please wait" });
       const response = await fetch(videoUrl, { mode: "cors" });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = `ai-video-${Date.now()}.mp4`;
+      a.download = `neroai-video-${Date.now()}.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-
-      // Clean up memory
       URL.revokeObjectURL(url);
 
-      toast({
-        title: "Download successful!",
-        description: "Video has been saved to your device",
-      });
+      toast({ title: "Download successful!", description: "Video saved to your device" });
+
     } catch (error) {
       console.error("Download error:", error);
-      toast({
-        title: "Error",
-        description: "Failed to download video. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to download video. Try a different browser.", variant: "destructive" });
     }
   };
 
   const clearHistory = () => {
     setVideoHistory([]);
     localStorage.removeItem("videoHistory");
-    toast({
-      title: "Cleared",
-      description: "All history has been deleted",
-    });
+    toast({ title: "Cleared", description: "All history deleted" });
   };
 
   return (
@@ -205,7 +151,7 @@ export const VideoGenerator = () => {
             disabled={isGenerating}
             size="lg"
             variant="hero"
-            className="w-full text-base font-semibold"
+            className="w-full text-base font-semibold transition-all duration-200 hover:scale-[1.02]"
           >
             {isGenerating ? (
               <>
@@ -269,11 +215,7 @@ export const VideoGenerator = () => {
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-3">
-            <Button
-              onClick={handleDownload}
-              variant="secondary"
-              className="gap-2"
-            >
+            <Button onClick={handleDownload} variant="secondary" className="gap-2 transition-all duration-200 hover:scale-[1.02]" disabled={isGenerating}>
               <Download className="h-4 w-4" />
               Download
             </Button>
@@ -283,7 +225,8 @@ export const VideoGenerator = () => {
                 handleGenerate();
               }}
               variant="outline"
-              className="gap-2"
+              className="gap-2 transition-all duration-200 hover:scale-[1.02]"
+              disabled={isGenerating}
             >
               <RefreshCw className="h-4 w-4" />
               Regenerate
@@ -295,7 +238,8 @@ export const VideoGenerator = () => {
                 setCurrentPrompt("");
               }}
               variant="outline"
-              className="gap-2"
+              className="gap-2 transition-all duration-200 hover:scale-[1.02]"
+              disabled={isGenerating}
             >
               <Video className="h-4 w-4" />
               New Video
@@ -312,12 +256,7 @@ export const VideoGenerator = () => {
               <Clock className="h-5 w-5 text-secondary" />
               Recent Videos
             </h3>
-            <Button
-              onClick={clearHistory}
-              variant="ghost"
-              size="sm"
-              className="gap-2"
-            >
+            <Button onClick={clearHistory} variant="ghost" size="sm" className="gap-2">
               <Trash2 className="h-4 w-4" />
               Clear
             </Button>
@@ -327,29 +266,4 @@ export const VideoGenerator = () => {
             {videoHistory.map((video, index) => (
               <div
                 key={index}
-                className="group relative rounded-lg overflow-hidden bg-background/30 border border-border/50 hover:border-primary/50 transition-all cursor-pointer"
-                onClick={() => {
-                  setVideoUrl(video.url);
-                  setCurrentPrompt(video.prompt);
-                  setPrompt(video.prompt);
-                }}
-              >
-                <video
-                  src={video.url}
-                  className="w-full h-32 object-cover"
-                  muted
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent flex items-end p-3">
-                  <p className="text-xs text-foreground/90 line-clamp-2">{video.prompt}</p>
-                </div>
-                <div className="absolute top-2 right-2 bg-background/80 backdrop-blur px-2 py-1 rounded text-xs">
-                  {new Date(video.timestamp).toLocaleDateString('en-US')}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-    </div>
-  );
-};
+                className="group relative rounded-lg overflow-hidden bg-background/30 border border-border/50 hover:border
