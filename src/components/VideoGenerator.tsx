@@ -122,45 +122,41 @@ export const VideoGenerator = () => {
     if (!videoUrl) return;
 
     try {
-        toast({
-            title: "Starting Download...",
-            description: "Please wait while the video is being prepared.",
-        });
+      toast({
+        title: "Starting Download...",
+        description: "Your download will begin shortly.",
+      });
 
-        // Using a proxy to bypass potential CORS issues
-        const proxyUrl = `https://cors-anywhere.herokuapp.com/`;
-        const response = await fetch(proxyUrl + videoUrl);
-        
-        if (!response.ok) {
-            throw new Error(`Failed to fetch video: ${response.statusText}`);
-        }
+      // Create an anchor element dynamically
+      const a = document.createElement("a");
+      a.href = videoUrl;
+      
+      // 'download' attribute tells the browser to download the file instead of navigating to it.
+      a.download = `ai-video-${Date.now()}.mp4`; 
+      
+      // Add the element to the DOM
+      document.body.appendChild(a);
+      
+      // Programmatically click the link
+      a.click();
+      
+      // Clean up by removing the element
+      document.body.removeChild(a);
 
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `ai-video-${Date.now()}.mp4`; // Set a unique filename
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url); // Clean up the object URL
-        
-        toast({
-            title: "Download Complete!",
-            description: "The video has been saved to your device.",
-        });
+      toast({
+        title: "Download Started!",
+        description: "The video is being saved to your device.",
+      });
 
     } catch (error) {
-        console.error("Download error:", error);
-        toast({
-            title: "Download Error",
-            description: "Could not download the video. Please try again.",
-            variant: "destructive",
-        });
+      console.error("Download error:", error);
+      toast({
+        title: "Download Error",
+        description: "Could not download the video. Please try right-clicking the video and selecting 'Save video as...'",
+        variant: "destructive",
+      });
     }
-};
-
+  };
 
   const handleShare = async () => {
     if (!videoUrl) return;
@@ -170,14 +166,13 @@ export const VideoGenerator = () => {
         await navigator.share({
           title: "AI Generated Video",
           text: `Check out this AI video I generated for the prompt: "${currentPrompt}"`,
-          url: window.location.href, // You might want to share the video URL directly
+          url: window.location.href,
         });
         toast({
           title: "Shared!",
           description: "The video was shared successfully.",
         });
       } else {
-        // Fallback for browsers that do not support the Web Share API
         await navigator.clipboard.writeText(videoUrl);
         toast({
           title: "Link Copied!",
@@ -205,6 +200,9 @@ export const VideoGenerator = () => {
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8">
+      {/* --- The rest of the JSX code remains the same --- */}
+      {/* --- Just copy the handleDownload function above --- */}
+      {/* --- and replace the old one in your file. --- */}
       <Card className="p-6 md:p-8 bg-[var(--gradient-card)] backdrop-blur-xl border-border shadow-[var(--shadow-card)]">
         <div className="space-y-6">
           <div className="space-y-3">
@@ -254,7 +252,6 @@ export const VideoGenerator = () => {
         </div>
       </Card>
 
-      {/* Example Prompts */}
       <Card className="p-6 bg-[var(--gradient-card)] backdrop-blur-xl border-border">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-secondary" />
@@ -274,7 +271,6 @@ export const VideoGenerator = () => {
         </div>
       </Card>
 
-      {/* Video Preview */}
       {videoUrl && (
         <Card className="p-6 bg-[var(--gradient-card)] backdrop-blur-xl border-border overflow-hidden">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -344,7 +340,6 @@ export const VideoGenerator = () => {
         </Card>
       )}
 
-      {/* Video History */}
       {videoHistory.length > 0 && (
         <Card className="p-6 bg-[var(--gradient-card)] backdrop-blur-xl border-border">
           <div className="flex items-center justify-between mb-4">
@@ -378,7 +373,7 @@ export const VideoGenerator = () => {
                   src={video.url}
                   className="w-full h-32 object-cover"
                   muted
-                  playsInline // Better for mobile
+                  playsInline
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent flex items-end p-3">
                   <p className="text-xs text-foreground/90 line-clamp-2">{video.prompt}</p>
