@@ -19,8 +19,8 @@ export const VideoGenerator = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<GeneratedVideo[]>([]);
-  const [isDownloading, setIsDownloading] = useState(false);
 
+  // Load history from localStorage
   useEffect(() => {
     const savedHistory = localStorage.getItem("videoHistory");
     if (savedHistory) {
@@ -28,8 +28,9 @@ export const VideoGenerator = () => {
     }
   }, []);
 
+  // Save history to localStorage
   const saveToHistory = (video: GeneratedVideo) => {
-    const newHistory = [video, ...videoHistory].slice(0, 5);
+    const newHistory = [video, ...videoHistory].slice(0, 5); // Keep last 5 videos
     setVideoHistory(newHistory);
     localStorage.setItem("videoHistory", JSON.stringify(newHistory));
   };
@@ -44,8 +45,8 @@ export const VideoGenerator = () => {
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast({
-        title: "Error",
-        description: "Please enter a prompt to generate a video.",
+        title: "خطا",
+        description: "براہ کرم ویڈیو کی تفصیل درج کریں",
         variant: "destructive",
       });
       return;
@@ -56,49 +57,130 @@ export const VideoGenerator = () => {
     setProgress(0);
     setCurrentPrompt(prompt);
 
+    // Simulate progress
     const progressInterval = setInterval(() => {
-      setProgress((prev) => (prev >= 90 ? prev : prev + Math.random() * 15));
+      setProgress((prev) => {
+        if (prev >= 90) return prev;
+        return prev + Math.random() * 15;
+      });
     }, 500);
 
     try {
       const encodedPrompt = encodeURIComponent(prompt.trim());
       const apiUrl = `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodedPrompt}`;
       
-      const response = await fetch(apiUrl);
-      if (!response.ok) throw new Error(`API Error: ${response.status}`);
-
-      const jsonData = await response.json();
-      if (!jsonData.success || !jsonData.url) {
-        throw new Error(jsonData.error || "Invalid API response");
+      console.log("Fetching video from:", apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        method: "GET",
+      });
+      
+      console.log("Response status:", response.status);
+      console.log("Response content-type:", response.headers.get("content-type"));
+      
+      if (!response.ok) {
+        // Try to get error message from response
+        let errorMessage = `API Error: ${response.status}`;
+        try {
+          const errorText = await response.text();
+          console.log("Error response:", errorText);
+          
+          // Try to parse as JSON
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorMessage = errorJson.error || errorJson.message || errorMessage;
+          } catch {
+            errorMessage = errorText || errorMessage;
+          }
+        } catch {
+          // Ignore if we can't read the error
+        }
+        throw new Error(errorMessage);
       }
 
-      const generatedVideoUrl = jsonData.url;
-      setVideoUrl(generatedVideoUrl);
-      setProgress(100);
-      saveToHistory({
-        url: generatedVideoUrl,
-        prompt: prompt.trim(),
-        timestamp: Date.now(),
-      });
+      const contentType = response.headers.get("content-type") || "";
+      console.log("Content type:", contentType);
 
-      toast({
-        title: "Success!",
-        description: "Your video has been generated.",
-      });
+      // Check if response is JSON (error or URL response)
+      if (contentType.includes("application/json") || contentType.includes("text")) {
+        const jsonData = await response.json();
+        console.log("JSON response:", jsonData);
+        
+        // Check if there's an error in JSON
+        if (jsonData.error) {
+          throw new Error(jsonData.error);
+        }
+        
+        // Check if there's a video URL in response
+        if (jsonData.url || jsonData.video_url || jsonData.videoUrl) {
+          const videoUrlFromApi = jsonData.url || jsonData.video_url || jsonData.videoUrl;
+          setVideoUrl(videoUrlFromApi);
+          setProgress(100);
+          
+          saveToHistory({
+            url: videoUrlFromApi,
+            prompt: prompt.trim(),
+            timestamp: Date.now(),
+          });
+          
+          toast({
+            title: "کامیاب!",
+            description: "آپ کی ویڈیو تیار ہو گئی ہے",
+          });
+          return;
+        }
+        
+        throw new Error("Invalid API response format");
+      }
+
+      // Handle video blob response
+      if (contentType.includes("video") || contentType.includes("octet-stream")) {
+        const blob = await response.blob();
+        console.log("Blob received:", blob.size, "bytes");
+        
+        if (blob.size === 0) {
+          throw new Error("Received empty video file");
+        }
+        
+        const url = URL.createObjectURL(blob);
+        setVideoUrl(url);
+        setProgress(100);
+
+        saveToHistory({
+          url,
+          prompt: prompt.trim(),
+          timestamp: Date.now(),
+        });
+
+        toast({
+          title: "کامیاب!",
+          description: "آپ کی ویڈیو تیار ہو گئی ہے",
+        });
+        return;
+      }
+
+      // If we get here, unknown response type
+      throw new Error(`Unexpected response type: ${contentType}`);
+      
     } catch (error) {
       console.error("Error generating video:", error);
-      let errorMessage = "Failed to generate video. Please try again.";
+      
+      let errorMessage = "ویڈیو بنانے میں مسئلہ پیش آیا۔ دوبارہ کوشش کریں";
+      
       if (error instanceof Error) {
         if (error.message.includes("Failed to fetch")) {
-          errorMessage = "Network error. Please check your internet connection.";
-        } else if (error.message.includes("429")) {
-          errorMessage = "Too many requests. Please wait a moment and try again.";
-        } else if (error.message.includes("500")) {
-          errorMessage = "Server error. Please try again later.";
+          errorMessage = "نیٹ ورک کی خرابی۔ اپنا انٹرنیٹ چیک کریں";
+        } else if (error.message.includes("API Error: 429")) {
+          errorMessage = "بہت زیادہ کوششیں۔ کچھ دیر بعد کوشش کریں";
+        } else if (error.message.includes("API Error: 500")) {
+          errorMessage = "سرور کی خرابی۔ دوبارہ کوشش کریں";
+        } else {
+          errorMessage = error.message;
         }
       }
+      
       toast({
-        title: "Error",
+        title: "خطا",
         description: errorMessage,
         variant: "destructive",
       });
@@ -109,40 +191,6 @@ export const VideoGenerator = () => {
     }
   };
 
-  const handleDownload = () => {
-    if (!videoUrl) return;
-
-    setIsDownloading(true);
-    toast({
-      title: "Preparing Download...",
-      description: "Your video will start downloading shortly.",
-    });
-
-    try {
-      const a = document.createElement("a");
-      a.href = videoUrl; // Direct URL
-      a.download = `ai-video-${Date.now()}.mp4`;
-      a.target = "_blank";
-      document.body.appendChild(a);
-      a.click(); // Trigger download
-      document.body.removeChild(a);
-
-      toast({
-        title: "Download Started!",
-        description: "Your video download has started.",
-      });
-    } catch (error) {
-      console.error("Download error:", error);
-      toast({
-        title: "Download Failed",
-        description: "Could not download the video. Right-click the video and select 'Save video as...' instead.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
   const handleShare = async () => {
     if (!videoUrl) return;
     
@@ -150,27 +198,23 @@ export const VideoGenerator = () => {
       if (navigator.share) {
         await navigator.share({
           title: "AI Generated Video",
-          text: `Check out this AI video I generated for the prompt: "${currentPrompt}"`,
+          text: currentPrompt,
           url: window.location.href,
         });
         toast({
-          title: "Shared!",
-          description: "The video was shared successfully.",
+          title: "شیئر کی گئی!",
+          description: "ویڈیو کامیابی سے شیئر ہوگئی",
         });
       } else {
-        await navigator.clipboard.writeText(videoUrl);
+        // Fallback: copy link
+        await navigator.clipboard.writeText(window.location.href);
         toast({
-          title: "Link Copied!",
-          description: "Video link copied to clipboard.",
+          title: "کاپی ہوگیا!",
+          description: "لنک clipboard میں کاپی ہوگیا",
         });
       }
     } catch (error) {
       console.error("Share error:", error);
-      toast({
-        title: "Share Error",
-        description: "Could not share the video.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -178,8 +222,8 @@ export const VideoGenerator = () => {
     setVideoHistory([]);
     localStorage.removeItem("videoHistory");
     toast({
-      title: "History Cleared",
-      description: "Your video history has been deleted.",
+      title: "صاف ہوگیا",
+      description: "تمام ہسٹری ڈیلیٹ ہوگئی",
     });
   };
 
@@ -190,22 +234,22 @@ export const VideoGenerator = () => {
           <div className="space-y-3">
             <label htmlFor="prompt" className="text-lg font-semibold flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-accent" />
-              Describe Your Video
+              اپنی ویڈیو کی تفصیل لکھیں
             </label>
             <Textarea
               id="prompt"
-              placeholder="e.g., A cat riding a skateboard in space, high resolution"
+              placeholder="مثال: ایک بلی جو خلا میں سکیٹ بورڈ چلا رہی ہے، ہائی ریزولوشن"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-[120px] text-base resize-none bg-background/50 backdrop-blur"
-              disabled={isGenerating || isDownloading}
+              disabled={isGenerating}
             />
           </div>
 
           {isGenerating && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Generating...</span>
+                <span className="text-muted-foreground">جنریٹ ہو رہا ہے...</span>
                 <span className="font-semibold">{Math.round(progress)}%</span>
               </div>
               <Progress value={progress} className="h-2" />
@@ -214,7 +258,7 @@ export const VideoGenerator = () => {
 
           <Button
             onClick={handleGenerate}
-            disabled={isGenerating || isDownloading}
+            disabled={isGenerating}
             size="lg"
             variant="hero"
             className="w-full text-base font-semibold"
@@ -222,22 +266,23 @@ export const VideoGenerator = () => {
             {isGenerating ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Generating Video...
+                ویڈیو بنائی جا رہی ہے...
               </>
             ) : (
               <>
                 <Video className="h-5 w-5" />
-                Generate Video
+                ویڈیو بنائیں
               </>
             )}
           </Button>
         </div>
       </Card>
 
+      {/* Example Prompts */}
       <Card className="p-6 bg-[var(--gradient-card)] backdrop-blur-xl border-border">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-secondary" />
-          Example Prompts
+          مثال کی تفصیلات
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {examplePrompts.map((example, index) => (
@@ -245,7 +290,7 @@ export const VideoGenerator = () => {
               key={index}
               onClick={() => setPrompt(example)}
               className="text-left p-3 rounded-lg bg-background/30 hover:bg-background/50 border border-border/50 transition-all duration-200 hover:scale-[1.02] text-sm"
-              disabled={isGenerating || isDownloading}
+              disabled={isGenerating}
             >
               {example}
             </button>
@@ -253,11 +298,12 @@ export const VideoGenerator = () => {
         </div>
       </Card>
 
+      {/* Video Preview */}
       {videoUrl && (
         <Card className="p-6 bg-[var(--gradient-card)] backdrop-blur-xl border-border overflow-hidden">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Video className="h-5 w-5 text-primary" />
-            Your Generated Video
+            آپ کی ویڈیو
           </h3>
           
           {currentPrompt && (
@@ -280,22 +326,25 @@ export const VideoGenerator = () => {
           
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             <Button
-              onClick={handleDownload}
+              onClick={() => {
+                const a = document.createElement("a");
+                a.href = videoUrl;
+                a.download = `ai-video-${Date.now()}.mp4`;
+                a.click();
+              }}
               variant="secondary"
               className="gap-2"
-              disabled={isDownloading}
             >
               <Download className="h-4 w-4" />
-              Download
+              ڈاؤن لوڈ
             </Button>
             <Button
               onClick={handleShare}
               variant="outline"
               className="gap-2"
-              disabled={isDownloading}
             >
               <Share2 className="h-4 w-4" />
-              Share
+              شیئر
             </Button>
             <Button
               onClick={() => {
@@ -304,10 +353,9 @@ export const VideoGenerator = () => {
               }}
               variant="outline"
               className="gap-2"
-              disabled={isDownloading}
             >
               <RefreshCw className="h-4 w-4" />
-              Regenerate
+              دوبارہ
             </Button>
             <Button
               onClick={() => {
@@ -317,21 +365,21 @@ export const VideoGenerator = () => {
               }}
               variant="outline"
               className="gap-2"
-              disabled={isDownloading}
             >
               <Video className="h-4 w-4" />
-              New Video
+              نئی ویڈیو
             </Button>
           </div>
         </Card>
       )}
 
+      {/* Video History */}
       {videoHistory.length > 0 && (
         <Card className="p-6 bg-[var(--gradient-card)] backdrop-blur-xl border-border">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold flex items-center gap-2">
               <Clock className="h-5 w-5 text-secondary" />
-              Recent Videos
+              حالیہ ویڈیوز
             </h3>
             <Button
               onClick={clearHistory}
@@ -340,7 +388,7 @@ export const VideoGenerator = () => {
               className="gap-2"
             >
               <Trash2 className="h-4 w-4" />
-              Clear All
+              صاف کریں
             </Button>
           </div>
           
@@ -359,13 +407,12 @@ export const VideoGenerator = () => {
                   src={video.url}
                   className="w-full h-32 object-cover"
                   muted
-                  playsInline
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent flex items-end p-3">
                   <p className="text-xs text-foreground/90 line-clamp-2">{video.prompt}</p>
                 </div>
                 <div className="absolute top-2 right-2 bg-background/80 backdrop-blur px-2 py-1 rounded text-xs">
-                  {new Date(video.timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                  {new Date(video.timestamp).toLocaleDateString('ur-PK')}
                 </div>
               </div>
             ))}
