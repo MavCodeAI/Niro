@@ -20,7 +20,6 @@ export const VideoGenerator = () => {
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<GeneratedVideo[]>([]);
 
-  // Load history from localStorage on component mount
   useEffect(() => {
     const savedHistory = localStorage.getItem("videoHistory");
     if (savedHistory) {
@@ -28,9 +27,8 @@ export const VideoGenerator = () => {
     }
   }, []);
 
-  // Save new video to history and localStorage
   const saveToHistory = (video: GeneratedVideo) => {
-    const newHistory = [video, ...videoHistory].slice(0, 5); // Keep the last 5 videos
+    const newHistory = [video, ...videoHistory].slice(0, 5);
     setVideoHistory(newHistory);
     localStorage.setItem("videoHistory", JSON.stringify(newHistory));
   };
@@ -121,38 +119,45 @@ export const VideoGenerator = () => {
   const handleDownload = async () => {
     if (!videoUrl) return;
 
-    try {
-      toast({
-        title: "Starting Download...",
-        description: "Your download will begin shortly.",
-      });
+    toast({
+      title: "Preparing Download...",
+      description: "Please wait while the video is being fetched.",
+    });
 
-      // Create an anchor element dynamically
-      const a = document.createElement("a");
-      a.href = videoUrl;
+    try {
+      // 1. Fetch the video data as a blob
+      const response = await fetch(videoUrl);
+      if (!response.ok) {
+        throw new Error(`Network response was not ok: ${response.statusText}`);
+      }
+      const blob = await response.blob();
+
+      // 2. Create a temporary URL for the blob
+      const url = URL.createObjectURL(blob);
+
+      // 3. Create a hidden anchor tag to trigger the download
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `ai-video-${Date.now()}.mp4`;
       
-      // 'download' attribute tells the browser to download the file instead of navigating to it.
-      a.download = `ai-video-${Date.now()}.mp4`; 
-      
-      // Add the element to the DOM
       document.body.appendChild(a);
-      
-      // Programmatically click the link
       a.click();
-      
-      // Clean up by removing the element
+
+      // 4. Clean up
+      URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
       toast({
         title: "Download Started!",
-        description: "The video is being saved to your device.",
+        description: "Your video is being saved.",
       });
 
     } catch (error) {
       console.error("Download error:", error);
       toast({
-        title: "Download Error",
-        description: "Could not download the video. Please try right-clicking the video and selecting 'Save video as...'",
+        title: "Download Failed",
+        description: "Could not download the video. Please try right-clicking the video and select 'Save video as...'",
         variant: "destructive",
       });
     }
@@ -200,9 +205,7 @@ export const VideoGenerator = () => {
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8">
-      {/* --- The rest of the JSX code remains the same --- */}
-      {/* --- Just copy the handleDownload function above --- */}
-      {/* --- and replace the old one in your file. --- */}
+      {/* The rest of the JSX is unchanged */}
       <Card className="p-6 md:p-8 bg-[var(--gradient-card)] backdrop-blur-xl border-border shadow-[var(--shadow-card)]">
         <div className="space-y-6">
           <div className="space-y-3">
