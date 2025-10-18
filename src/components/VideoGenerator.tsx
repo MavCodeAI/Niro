@@ -26,8 +26,9 @@ export const VideoGenerator = () => {
     if (savedHistory) setVideoHistory(JSON.parse(savedHistory));
   }, []);
 
+  // Save video to history
   const saveToHistory = (video: GeneratedVideo) => {
-    const newHistory = [video, ...videoHistory].slice(0, 5);
+    const newHistory = [video, ...videoHistory].slice(0, 5); // keep last 5
     setVideoHistory(newHistory);
     localStorage.setItem("videoHistory", JSON.stringify(newHistory));
   };
@@ -39,9 +40,10 @@ export const VideoGenerator = () => {
     "Ocean waves crashing on a beach at golden hour",
   ];
 
+  // Generate video
   const handleGenerate = async () => {
     if (!prompt.trim()) {
-      toast({ title: "Error", description: "Please enter a description for the video", variant: "destructive" });
+      toast({ title: "Error", description: "Please enter a video description", variant: "destructive" });
       return;
     }
 
@@ -58,19 +60,22 @@ export const VideoGenerator = () => {
       const encodedPrompt = encodeURIComponent(prompt.trim());
       const apiUrl = `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodedPrompt}`;
       const response = await fetch(apiUrl);
+
       if (!response.ok) throw new Error(`API Error: ${response.status}`);
       const jsonData = await response.json();
+
       if (!jsonData.success || !jsonData.url) throw new Error(jsonData.error || "Invalid API response");
 
-      setVideoUrl(jsonData.url);
+      setVideoUrl(jsonData.url); // direct URL
       setProgress(100);
 
       saveToHistory({ url: jsonData.url, prompt: prompt.trim(), timestamp: Date.now() });
-      toast({ title: "Success!", description: "Your video has been generated successfully" });
+
+      toast({ title: "Success!", description: "Video generated successfully" });
 
     } catch (error) {
-      console.error("Error generating video:", error);
-      let message = "Failed to generate video. Please try again.";
+      console.error("Generate error:", error);
+      let message = "Failed to generate video. Try again.";
       if (error instanceof Error) {
         if (error.message.includes("Failed to fetch")) message = "Network error. Check your connection.";
         else if (error.message.includes("429")) message = "Too many requests. Try again later.";
@@ -84,32 +89,30 @@ export const VideoGenerator = () => {
     }
   };
 
+  // Download video from direct URL
   const handleDownload = async () => {
     if (!videoUrl) return;
 
     try {
-      toast({ title: "Download starting...", description: "Please wait" });
-      const response = await fetch(videoUrl, { mode: "cors" });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
+      toast({ title: "Preparing download...", description: "Please wait" });
 
+      // Create a hidden anchor tag
       const a = document.createElement("a");
-      a.href = url;
+      a.href = videoUrl;
       a.download = `neroai-video-${Date.now()}.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
 
-      toast({ title: "Download successful!", description: "Video saved to your device" });
+      toast({ title: "Download ready!", description: "Video ready to save" });
 
     } catch (error) {
       console.error("Download error:", error);
-      toast({ title: "Error", description: "Failed to download video. Try a different browser.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to download video. Try opening in a new tab.", variant: "destructive" });
     }
   };
 
+  // Clear history
   const clearHistory = () => {
     setVideoHistory([]);
     localStorage.removeItem("videoHistory");
@@ -118,13 +121,13 @@ export const VideoGenerator = () => {
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8">
-      {/* Prompt Input */}
+      {/* Input */}
       <Card className="p-6 md:p-8 bg-[var(--gradient-card)] backdrop-blur-xl border-border shadow-[var(--shadow-card)]">
         <div className="space-y-6">
           <div className="space-y-3">
             <label htmlFor="prompt" className="text-lg font-semibold flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-accent" />
-              Enter your video description
+              Enter video description
             </label>
             <Textarea
               id="prompt"
@@ -156,7 +159,7 @@ export const VideoGenerator = () => {
             {isGenerating ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Generating video...
+                Generating...
               </>
             ) : (
               <>
@@ -203,46 +206,20 @@ export const VideoGenerator = () => {
           )}
 
           <div className="relative rounded-lg overflow-hidden bg-background/20">
-            <video
-              src={videoUrl}
-              controls
-              className="w-full h-auto max-h-[500px] object-contain"
-              autoPlay
-              loop
-            >
+            <video src={videoUrl} controls className="w-full h-auto max-h-[500px] object-contain" autoPlay loop>
               Your browser does not support the video tag.
             </video>
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-3">
             <Button onClick={handleDownload} variant="secondary" className="gap-2 transition-all duration-200 hover:scale-[1.02]" disabled={isGenerating}>
-              <Download className="h-4 w-4" />
-              Download
+              <Download className="h-4 w-4" /> Download
             </Button>
-            <Button
-              onClick={() => {
-                setPrompt(currentPrompt);
-                handleGenerate();
-              }}
-              variant="outline"
-              className="gap-2 transition-all duration-200 hover:scale-[1.02]"
-              disabled={isGenerating}
-            >
-              <RefreshCw className="h-4 w-4" />
-              Regenerate
+            <Button onClick={() => { setPrompt(currentPrompt); handleGenerate(); }} variant="outline" className="gap-2 transition-all duration-200 hover:scale-[1.02]" disabled={isGenerating}>
+              <RefreshCw className="h-4 w-4" /> Regenerate
             </Button>
-            <Button
-              onClick={() => {
-                setVideoUrl(null);
-                setPrompt("");
-                setCurrentPrompt("");
-              }}
-              variant="outline"
-              className="gap-2 transition-all duration-200 hover:scale-[1.02]"
-              disabled={isGenerating}
-            >
-              <Video className="h-4 w-4" />
-              New Video
+            <Button onClick={() => { setVideoUrl(null); setPrompt(""); setCurrentPrompt(""); }} variant="outline" className="gap-2 transition-all duration-200 hover:scale-[1.02]" disabled={isGenerating}>
+              <Video className="h-4 w-4" /> New Video
             </Button>
           </div>
         </Card>
@@ -253,17 +230,28 @@ export const VideoGenerator = () => {
         <Card className="p-6 bg-[var(--gradient-card)] backdrop-blur-xl border-border">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold flex items-center gap-2">
-              <Clock className="h-5 w-5 text-secondary" />
-              Recent Videos
+              <Clock className="h-5 w-5 text-secondary" /> Recent Videos
             </h3>
             <Button onClick={clearHistory} variant="ghost" size="sm" className="gap-2">
-              <Trash2 className="h-4 w-4" />
-              Clear
+              <Trash2 className="h-4 w-4" /> Clear
             </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {videoHistory.map((video, index) => (
-              <div
-                key={index}
-                className="group relative rounded-lg overflow-hidden bg-background/30 border border-border/50 hover:border
+              <div key={index} className="group relative rounded-lg overflow-hidden bg-background/30 border border-border/50 hover:border-primary/50 transition-all cursor-pointer" onClick={() => { setVideoUrl(video.url); setCurrentPrompt(video.prompt); setPrompt(video.prompt); }}>
+                <video src={video.url} className="w-full h-32 object-cover" muted />
+                <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent flex items-end p-3">
+                  <p className="text-xs text-foreground/90 line-clamp-2">{video.prompt}</p>
+                </div>
+                <div className="absolute top-2 right-2 bg-background/80 backdrop-blur px-2 py-1 rounded text-xs">
+                  {new Date(video.timestamp).toLocaleDateString("en-US")}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+};
