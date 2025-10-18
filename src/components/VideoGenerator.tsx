@@ -20,6 +20,9 @@ export const VideoGenerator = () => {
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<GeneratedVideo[]>([]);
 
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [isDownloading, setIsDownloading] = useState(false);
+
   useEffect(() => {
     const savedHistory = localStorage.getItem("videoHistory");
     if (savedHistory) {
@@ -119,47 +122,62 @@ export const VideoGenerator = () => {
   const handleDownload = async () => {
     if (!videoUrl) return;
 
+    setIsDownloading(true);
+    setDownloadProgress(0);
+
     toast({
       title: "Preparing Download...",
-      description: "Please wait while the video is being fetched.",
+      description: "Fetching video data...",
     });
 
     try {
-      // 1. Fetch the video data as a blob
       const response = await fetch(videoUrl);
-      if (!response.ok) {
-        throw new Error(`Network response was not ok: ${response.statusText}`);
+      if (!response.ok) throw new Error(`Network response was not ok: ${response.statusText}`);
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("Unable to read video stream");
+
+      const contentLength = +response.headers.get("Content-Length")!;
+      let receivedLength = 0;
+      const chunks = [];
+
+      while(true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          receivedLength += value.length;
+          setDownloadProgress(Math.round((receivedLength / contentLength) * 100));
+        }
       }
-      const blob = await response.blob();
 
-      // 2. Create a temporary URL for the blob
-      const url = URL.createObjectURL(blob);
+      const blob = new Blob(chunks, { type: "video/mp4" });
+      const blobUrl = URL.createObjectURL(blob);
 
-      // 3. Create a hidden anchor tag to trigger the download
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = blobUrl;
       a.download = `ai-video-${Date.now()}.mp4`;
-      
       document.body.appendChild(a);
       a.click();
 
-      // 4. Clean up
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(blobUrl);
       document.body.removeChild(a);
 
       toast({
-        title: "Download Started!",
-        description: "Your video is being saved.",
+        title: "Download Completed!",
+        description: "Your video has been saved.",
       });
-
     } catch (error) {
       console.error("Download error:", error);
       toast({
         title: "Download Failed",
-        description: "Could not download the video. Please try right-clicking the video and select 'Save video as...'",
+        description: "Could not download the video.",
         variant: "destructive",
       });
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress(0);
     }
   };
 
@@ -205,7 +223,6 @@ export const VideoGenerator = () => {
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8">
-      {/* The rest of the JSX is unchanged */}
       <Card className="p-6 md:p-8 bg-[var(--gradient-card)] backdrop-blur-xl border-border shadow-[var(--shadow-card)]">
         <div className="space-y-6">
           <div className="space-y-3">
@@ -219,7 +236,7 @@ export const VideoGenerator = () => {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-[120px] text-base resize-none bg-background/50 backdrop-blur"
-              disabled={isGenerating}
+              disabled={isGenerating || isDownloading}
             />
           </div>
 
@@ -235,7 +252,7 @@ export const VideoGenerator = () => {
 
           <Button
             onClick={handleGenerate}
-            disabled={isGenerating}
+            disabled={isGenerating || isDownloading}
             size="lg"
             variant="hero"
             className="w-full text-base font-semibold"
@@ -266,7 +283,7 @@ export const VideoGenerator = () => {
               key={index}
               onClick={() => setPrompt(example)}
               className="text-left p-3 rounded-lg bg-background/30 hover:bg-background/50 border border-border/50 transition-all duration-200 hover:scale-[1.02] text-sm"
-              disabled={isGenerating}
+              disabled={isGenerating || isDownloading}
             >
               {example}
             </button>
@@ -298,12 +315,20 @@ export const VideoGenerator = () => {
               Your browser does not support the video tag.
             </video>
           </div>
+
+          {isDownloading && (
+            <div className="mt-2">
+              <span className="text-sm text-muted-foreground">Downloading... {downloadProgress}%</span>
+              <Progress value={downloadProgress} className="h-2 mt-1" />
+            </div>
+          )}
           
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             <Button
               onClick={handleDownload}
               variant="secondary"
               className="gap-2"
+              disabled={isDownloading}
             >
               <Download className="h-4 w-4" />
               Download
@@ -312,6 +337,7 @@ export const VideoGenerator = () => {
               onClick={handleShare}
               variant="outline"
               className="gap-2"
+              disabled={isDownloading}
             >
               <Share2 className="h-4 w-4" />
               Share
@@ -323,6 +349,7 @@ export const VideoGenerator = () => {
               }}
               variant="outline"
               className="gap-2"
+              disabled={isDownloading}
             >
               <RefreshCw className="h-4 w-4" />
               Regenerate
@@ -335,6 +362,7 @@ export const VideoGenerator = () => {
               }}
               variant="outline"
               className="gap-2"
+              disabled={isDownloading}
             >
               <Video className="h-4 w-4" />
               New Video
@@ -391,4 +419,4 @@ export const VideoGenerator = () => {
       )}
     </div>
   );
-};
+}; 
