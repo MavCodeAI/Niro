@@ -19,8 +19,6 @@ export const VideoGenerator = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<GeneratedVideo[]>([]);
-
-  const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
@@ -67,13 +65,9 @@ export const VideoGenerator = () => {
       const apiUrl = `https://yabes-api.pages.dev/api/ai/video/v1?prompt=${encodedPrompt}`;
       
       const response = await fetch(apiUrl);
-      
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
 
       const jsonData = await response.json();
-      
       if (!jsonData.success || !jsonData.url) {
         throw new Error(jsonData.error || "Invalid API response");
       }
@@ -81,21 +75,18 @@ export const VideoGenerator = () => {
       const generatedVideoUrl = jsonData.url;
       setVideoUrl(generatedVideoUrl);
       setProgress(100);
-      
       saveToHistory({
         url: generatedVideoUrl,
         prompt: prompt.trim(),
         timestamp: Date.now(),
       });
-      
+
       toast({
         title: "Success!",
         description: "Your video has been generated.",
       });
-      
     } catch (error) {
       console.error("Error generating video:", error);
-      
       let errorMessage = "Failed to generate video. Please try again.";
       if (error instanceof Error) {
         if (error.message.includes("Failed to fetch")) {
@@ -106,7 +97,6 @@ export const VideoGenerator = () => {
           errorMessage = "Server error. Please try again later.";
         }
       }
-      
       toast({
         title: "Error",
         description: errorMessage,
@@ -119,65 +109,37 @@ export const VideoGenerator = () => {
     }
   };
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (!videoUrl) return;
 
     setIsDownloading(true);
-    setDownloadProgress(0);
-
     toast({
       title: "Preparing Download...",
-      description: "Fetching video data...",
+      description: "Your video will start downloading shortly.",
     });
 
     try {
-      const response = await fetch(videoUrl);
-      if (!response.ok) throw new Error(`Network response was not ok: ${response.statusText}`);
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("Unable to read video stream");
-
-      const contentLength = +response.headers.get("Content-Length")!;
-      let receivedLength = 0;
-      const chunks = [];
-
-      while(true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) {
-          chunks.push(value);
-          receivedLength += value.length;
-          setDownloadProgress(Math.round((receivedLength / contentLength) * 100));
-        }
-      }
-
-      const blob = new Blob(chunks, { type: "video/mp4" });
-      const blobUrl = URL.createObjectURL(blob);
-
       const a = document.createElement("a");
-      a.style.display = "none";
-      a.href = blobUrl;
+      a.href = videoUrl; // Direct URL
       a.download = `ai-video-${Date.now()}.mp4`;
+      a.target = "_blank";
       document.body.appendChild(a);
-      a.click();
-
-      URL.revokeObjectURL(blobUrl);
+      a.click(); // Trigger download
       document.body.removeChild(a);
 
       toast({
-        title: "Download Completed!",
-        description: "Your video has been saved.",
+        title: "Download Started!",
+        description: "Your video download has started.",
       });
     } catch (error) {
       console.error("Download error:", error);
       toast({
         title: "Download Failed",
-        description: "Could not download the video.",
+        description: "Could not download the video. Right-click the video and select 'Save video as...' instead.",
         variant: "destructive",
       });
     } finally {
       setIsDownloading(false);
-      setDownloadProgress(0);
     }
   };
 
@@ -315,13 +277,6 @@ export const VideoGenerator = () => {
               Your browser does not support the video tag.
             </video>
           </div>
-
-          {isDownloading && (
-            <div className="mt-2">
-              <span className="text-sm text-muted-foreground">Downloading... {downloadProgress}%</span>
-              <Progress value={downloadProgress} className="h-2 mt-1" />
-            </div>
-          )}
           
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             <Button
@@ -419,4 +374,4 @@ export const VideoGenerator = () => {
       )}
     </div>
   );
-}; 
+};
