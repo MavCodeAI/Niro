@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, Camera } from "lucide-react";
+import { Loader2, Sparkles, Video, Download, Clock, Trash2, RefreshCw, Camera, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // (Interfaces, Constants, etc. remain the same)
 interface GeneratedVideo {
@@ -35,6 +38,7 @@ const FALLBACK_PROMPTS = [
 ];
 
 export const VideoGenerator = () => {
+  const { user } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [negativePrompt] = useState("blurry, low quality, text, watermark, grainy, deformed, ugly");
   const [cameraControl, setCameraControl] = useState<keyof typeof CAMERA_CONTROLS>("NONE");
@@ -46,6 +50,8 @@ export const VideoGenerator = () => {
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<GeneratedVideo[]>([]);
   const [examplePrompts] = useState<string[]>(FALLBACK_PROMPTS);
+  const [userStats, setUserStats] = useState<any>(null);
+  const [canGenerate, setCanGenerate] = useState(true);
 
   // --- NEW: Function to apply a moving watermark ---
   const applyWatermark = async (videoSrc: string): Promise<string> => {
@@ -121,6 +127,15 @@ export const VideoGenerator = () => {
       return;
     }
 
+    if (!canGenerate) {
+      toast({ 
+        title: "Daily limit reached", 
+        description: "You've used all your daily video credits. Invite friends to earn more!",
+        variant: "destructive" 
+      });
+      return;
+    }
+
     setIsGenerating(true);
     setVideoUrl(null);
     setProgress(0);
@@ -137,10 +152,29 @@ export const VideoGenerator = () => {
       const watermarkedVideoUrl = await applyWatermark(rawVideoUrl);
       setProgress(100);
       
+      // Save to database
+      if (user) {
+        await supabase.from("video_history").insert({
+          user_id: user.id,
+          prompt: prompt,
+          camera_control: cameraControl !== 'NONE' ? cameraControl : null,
+          video_url: watermarkedVideoUrl
+        });
+
+        // Update usage stats
+        await supabase
+          .from("user_stats")
+          .update({ 
+            daily_videos_used: userStats.daily_videos_used + 1 
+          })
+          .eq("user_id", user.id);
+
+        await fetchUserStats();
+      }
+      
       const newVideoData: GeneratedVideo = { prompt, cameraControl, url: watermarkedVideoUrl, timestamp: Date.now() };
       setVideoUrl(watermarkedVideoUrl);
       setCurrentVideo(newVideoData);
-      saveToHistory(newVideoData);
       
       toast({ title: "Success! 🎉", description: "Your watermarked video is ready." });
 
@@ -154,17 +188,68 @@ export const VideoGenerator = () => {
     setStatusText("");
   };
 
-  // --- The rest of the functions (buildFinalPrompt, generateVideo, etc.) remain the same ---
-  useEffect(() => {
-    const savedHistory = localStorage.getItem("videoHistory");
-    if (savedHistory) setVideoHistory(JSON.parse(savedHistory));
-  }, []);
+  const fetchUserStats = async () => {
+    if (!user) return;
 
-  const saveToHistory = (video: GeneratedVideo) => {
-    const newHistory = [video, ...videoHistory].slice(0, 10);
-    setVideoHistory(newHistory);
-    localStorage.setItem("videoHistory", JSON.stringify(newHistory));
+    const { data, error } = await supabase
+      .from("user_stats")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!error && data) {
+      // Check if we need to reset daily usage
+      const lastReset = new Date(data.last_reset_at);
+      const now = new Date();
+      const hoursSinceReset = (now.getTime() - lastReset.getTime()) / (1000 * 60 * 60);
+
+      if (hoursSinceReset >= 24) {
+        // Reset daily usage
+        await supabase
+          .from("user_stats")
+          .update({
+            daily_videos_used: 0,
+            last_reset_at: now.toISOString()
+          })
+          .eq("user_id", user.id);
+
+        const resetStats = { ...data, daily_videos_used: 0, last_reset_at: now.toISOString() };
+        setUserStats(resetStats);
+        setCanGenerate(true);
+      } else {
+        setUserStats(data);
+        const totalLimit = data.base_daily_limit + data.bonus_credits;
+        setCanGenerate(data.daily_videos_used < totalLimit);
+      }
+    }
   };
+
+  const fetchVideoHistory = async () => {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("video_history")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    if (!error && data) {
+      setVideoHistory(data.map(v => ({
+        url: v.video_url,
+        prompt: v.prompt,
+        cameraControl: v.camera_control || undefined,
+        timestamp: new Date(v.created_at).getTime()
+      })));
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchUserStats();
+      fetchVideoHistory();
+    }
+  }, [user]);
 
   const buildFinalPrompt = () => {
     let finalPrompt = prompt;
@@ -193,15 +278,15 @@ a.click();
     toast({ title: "Download Started", description: "Your video is being saved." });
   };
   
-  const handleShare = async () => {
-    if (!videoUrl) return;
-    await navigator.clipboard.writeText(videoUrl);
-    toast({ title: "Link Copied!", description: "A shareable link is copied to your clipboard." });
-  };
-  
-  const clearHistory = () => {
+  const clearHistory = async () => {
+    if (!user) return;
+    
+    await supabase
+      .from("video_history")
+      .delete()
+      .eq("user_id", user.id);
+    
     setVideoHistory([]);
-    localStorage.removeItem("videoHistory");
     toast({ title: "History Cleared" });
   };
 
@@ -213,8 +298,25 @@ a.click();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const totalLimit = userStats ? userStats.base_daily_limit + userStats.bonus_credits : 10;
+  const remaining = userStats ? totalLimit - userStats.daily_videos_used : 10;
+
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8 p-4">
+      {/* Usage Stats Alert */}
+      {userStats && (
+        <Alert className={`${!canGenerate ? 'border-destructive/50 bg-destructive/10' : 'border-primary/50 bg-primary/10'}`}>
+          <AlertCircle className={`h-4 w-4 ${!canGenerate ? 'text-destructive' : 'text-primary'}`} />
+          <AlertDescription>
+            {canGenerate ? (
+              <>You have <strong>{remaining}</strong> of <strong>{totalLimit}</strong> daily videos remaining</>
+            ) : (
+              <>Daily limit reached! Invite friends to earn +2 credits per referral</>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card className="p-6 md:p-8 bg-card/50 backdrop-blur-lg border-border/20 shadow-lg">
         <div className="space-y-6">
           <div className="space-y-3">
@@ -254,8 +356,19 @@ a.click();
             </div>
           )}
 
-          <Button onClick={handleGenerate} disabled={isGenerating || !prompt.trim()} size="lg" className="w-full text-lg font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:shadow-lg hover:scale-105 transition-transform">
-            {isGenerating ? <><Loader2 className="h-6 w-6 animate-spin mr-2" />Generating...</> : <><Video className="h-6 w-6 mr-2" />Generate Video</>}
+          <Button 
+            onClick={handleGenerate} 
+            disabled={isGenerating || !prompt.trim() || !canGenerate} 
+            size="lg" 
+            className="w-full text-lg font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:shadow-lg hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isGenerating ? (
+              <><Loader2 className="h-6 w-6 animate-spin mr-2" />Generating...</>
+            ) : !canGenerate ? (
+              <><AlertCircle className="h-6 w-6 mr-2" />Daily Limit Reached</>
+            ) : (
+              <><Video className="h-6 w-6 mr-2" />Generate Video</>
+            )}
           </Button>
         </div>
       </Card>
@@ -278,11 +391,12 @@ a.click();
           <div className="relative rounded-lg overflow-hidden bg-black">
             <video src={videoUrl} controls autoPlay loop className="w-full h-auto" />
           </div>
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-3">
             <Button onClick={handleDownload} variant="secondary" className="gap-2"><Download className="h-4 w-4" />Download</Button>
-            <Button onClick={handleShare} variant="outline" className="gap-2"><Share2 className="h-4 w-4" />Share</Button>
-            <Button onClick={handleGenerate} variant="outline" className="gap-2"><RefreshCw className="h-4 w-4" />Regenerate</Button>
-            <Button onClick={() => setVideoUrl(null)} variant="destructive" className="gap-2"><Video className="h-4 w-4" />Create New</Button>
+            <Button onClick={handleGenerate} variant="outline" className="gap-2" disabled={!canGenerate}>
+              <RefreshCw className="h-4 w-4" />Regenerate
+            </Button>
+            <Button onClick={() => setVideoUrl(null)} variant="outline" className="gap-2"><Video className="h-4 w-4" />Create New</Button>
           </div>
         </Card>
       )}
