@@ -12,7 +12,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="border-t border-border/50 backdrop-blur-xl">
         <div className="container mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
-          <p>Powered by NeroAI • Made with ❤️</p>
+          <p>Powered by AI • Made with ❤️</p>
         </div>
       </footer>
     </div>
