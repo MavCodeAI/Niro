@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Sparkles, Video, Download, Share2, Clock, Trash2, RefreshCw, Camera } from "lucide-react";
+import { Loader2, Sparkles, Video, Download, Clock, Trash2, RefreshCw, Camera, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
+import { useClerkAuth } from "@/contexts/ClerkAuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 // Define interfaces for history and other objects
 interface GeneratedVideo {
@@ -36,8 +39,10 @@ const FALLBACK_PROMPTS = [
 ];
 
 export const VideoGenerator = () => {
+  const navigate = useNavigate();
+  const { isSignedIn, userId, userStats, refreshUserStats } = useClerkAuth();
+  
   const [prompt, setPrompt] = useState("");
-  // Negative prompt is a fixed value, hidden from the user.
   const [negativePrompt] = useState("blurry, low quality, text, watermark, grainy, deformed, ugly");
   const [cameraControl, setCameraControl] = useState<keyof typeof CAMERA_CONTROLS>("NONE");
   
@@ -47,6 +52,9 @@ export const VideoGenerator = () => {
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<GeneratedVideo[]>([]);
   const [examplePrompts, setExamplePrompts] = useState<string[]>(FALLBACK_PROMPTS);
+
+  const remainingCredits = userStats ? userStats.totalDailyLimit - userStats.dailyVideosUsed : 0;
+  const canGenerate = isSignedIn && remainingCredits > 0;
 
   useEffect(() => {
     const savedHistory = localStorage.getItem("videoHistory");
@@ -84,6 +92,21 @@ export const VideoGenerator = () => {
   };
 
   const handleGenerate = async () => {
+    if (!isSignedIn) {
+      toast({ title: "Sign In Required", description: "Please sign in to generate videos.", variant: "destructive" });
+      navigate("/sign-in");
+      return;
+    }
+
+    if (remainingCredits <= 0) {
+      toast({ 
+        title: "Daily Limit Reached", 
+        description: "You've used all your daily credits. Invite friends to get more!", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     if (!prompt.trim()) {
       toast({ title: "Prompt is empty", description: "Please enter a description for the video.", variant: "destructive" });
       return;
@@ -105,6 +128,26 @@ export const VideoGenerator = () => {
       setCurrentVideo(generatedVideo);
       setProgress(100);
       saveToHistory(generatedVideo);
+
+      // Save to database and update usage
+      if (userId) {
+        await supabase.from('video_history').insert({
+          clerk_user_id: userId,
+          prompt,
+          camera_control: cameraControl === 'NONE' ? null : cameraControl,
+          video_url: url,
+        });
+
+        await supabase
+          .from('user_stats')
+          .update({
+            daily_videos_used: (userStats?.dailyVideosUsed || 0) + 1,
+          })
+          .eq('clerk_user_id', userId);
+
+        await refreshUserStats();
+      }
+
       toast({ title: "Success! 🎉", description: "Your video has been generated." });
     } catch (error) {
       console.error("Generation failed:", error);
@@ -147,6 +190,32 @@ export const VideoGenerator = () => {
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8 p-4">
+      {isSignedIn && userStats && (
+        <Card className="p-4 bg-card/80 backdrop-blur-lg border-border/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-accent" />
+              <span className="font-semibold">Daily Credits:</span>
+              <span className="text-lg font-bold text-primary">
+                {remainingCredits} / {userStats.totalDailyLimit}
+              </span>
+            </div>
+            {remainingCredits === 0 && (
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-sm">Limit reached!</span>
+              </div>
+            )}
+          </div>
+          {userStats.totalReferrals > 0 && (
+            <p className="text-sm text-muted-foreground mt-2">
+              🎉 You have {userStats.totalReferrals} referral{userStats.totalReferrals > 1 ? 's' : ''} 
+              (+{userStats.totalDailyLimit - 10} bonus credits)
+            </p>
+          )}
+        </Card>
+      )}
+
       <Card className="p-6 md:p-8 bg-card/50 backdrop-blur-lg border-border/20 shadow-lg">
         <div className="space-y-6">
           <div className="space-y-3">
@@ -160,7 +229,7 @@ export const VideoGenerator = () => {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-[120px] text-base resize-none bg-background/70"
-              disabled={isGenerating}
+              disabled={isGenerating || !isSignedIn}
             />
           </div>
 
@@ -186,8 +255,21 @@ export const VideoGenerator = () => {
             </div>
           )}
 
-          <Button onClick={handleGenerate} disabled={isGenerating || !prompt.trim()} size="lg" className="w-full text-lg font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:shadow-lg hover:scale-105 transition-transform">
-            {isGenerating ? <><Loader2 className="h-6 w-6 animate-spin mr-2" />Generating...</> : <><Video className="h-6 w-6 mr-2" />Generate Video</>}
+          <Button 
+            onClick={handleGenerate} 
+            disabled={isGenerating || !prompt.trim() || !canGenerate} 
+            size="lg" 
+            className="w-full text-lg font-bold bg-gradient-to-r from-primary to-accent text-primary-foreground hover:shadow-lg hover:scale-105 transition-transform disabled:opacity-50"
+          >
+            {!isSignedIn ? (
+              <>Sign In to Generate</>
+            ) : isGenerating ? (
+              <><Loader2 className="h-6 w-6 animate-spin mr-2" />Generating...</>
+            ) : remainingCredits === 0 ? (
+              <>Daily Limit Reached</>
+            ) : (
+              <><Video className="h-6 w-6 mr-2" />Generate Video</>
+            )}
           </Button>
         </div>
       </Card>
@@ -212,8 +294,7 @@ export const VideoGenerator = () => {
           </div>
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             <Button onClick={handleDownload} variant="secondary" className="gap-2"><Download className="h-4 w-4" />Download</Button>
-            <Button onClick={handleShare} variant="outline" className="gap-2"><Share2 className="h-4 w-4" />Share</Button>
-            <Button onClick={handleGenerate} variant="outline" className="gap-2"><RefreshCw className="h-4 w-4" />Regenerate</Button>
+            <Button onClick={handleGenerate} variant="outline" className="gap-2" disabled={!canGenerate}><RefreshCw className="h-4 w-4" />Regenerate</Button>
             <Button onClick={() => setVideoUrl(null)} variant="destructive" className="gap-2"><Video className="h-4 w-4" />Create New</Button>
           </div>
         </Card>
